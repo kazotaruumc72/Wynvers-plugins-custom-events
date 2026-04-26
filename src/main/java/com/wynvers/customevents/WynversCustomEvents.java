@@ -7,18 +7,20 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
-
 /**
- * WynversCustomEvents - OreStack addon that enables custom Nexo item actions
- * in OreStack generator events via the actions.yml configuration.
+ * WynversCustomEvents – OreStack addon that lets server admins declare
+ * custom actions (give Nexo items, give vanilla items, run commands)
+ * <strong>directly inside the OreStack generator configuration files</strong>
+ * (e.g. {@code plugins/Orestack/generators/<name>.yml}).
  *
- * <p>Usage in orestack/events/actions.yml:
+ * <p>Example stage in an OreStack generator file:
  * <pre>
- * generators:
- *   my_generator:
- *     on-mine:
- *       - do: giveItem NexoItems:enchanted_cobblestone
+ * type: ripe
+ * block: bedrock
+ * default-drops: true
+ * growth: 20s
+ * on-break:
+ *   - do: giveItem NexoItems:enchanted_cobblestone
  * </pre>
  */
 public class WynversCustomEvents extends JavaPlugin {
@@ -30,11 +32,8 @@ public class WynversCustomEvents extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        // Save default actions config if it does not exist
-        File actionsFile = new File(getDataFolder(), "orestack/events/actions.yml");
-        if (!actionsFile.exists()) {
-            saveResource("orestack/events/actions.yml", false);
-        }
+        // Save default config.yml (used to override the OreStack generators path)
+        saveDefaultConfig();
 
         // Hook into OreStack if present
         if (Bukkit.getPluginManager().getPlugin("Orestack") != null) {
@@ -85,12 +84,14 @@ public class WynversCustomEvents extends JavaPlugin {
     }
 
     /**
-     * Reloads the OreStack actions configuration from disk.
+     * Reloads the WynversCustomEvents config and re-scans the OreStack
+     * generator files.
      */
     public void reloadActionsConfig() {
+        reloadConfig();
         if (orestackListener != null) {
             orestackListener.loadActionsConfig();
-            getLogger().info("OreStack actions configuration reloaded.");
+            getLogger().info("OreStack generator actions reloaded.");
         }
     }
 }

@@ -55,6 +55,45 @@ public class ActionExecutor {
         }
     }
 
+    /**
+     * Executes an action without an associated player (e.g. for
+     * {@code GeneratorGrowthEvent}). Only player-independent actions are
+     * supported – currently {@code console <command>} that does not reference
+     * the {@code %player%} placeholder. All other actions are skipped with a
+     * warning.
+     *
+     * @param action the raw action string
+     */
+    public void executeWithoutPlayer(@NotNull String action) {
+        if (action.isBlank()) return;
+
+        String[] parts = action.strip().split("\\s+", 3);
+        String actionType = parts[0].toLowerCase();
+
+        if (!"console".equals(actionType)) {
+            plugin.getLogger().warning(
+                    "Action '" + parts[0] + "' requires a player but none is available "
+                    + "(e.g. on-growth) – skipping.");
+            return;
+        }
+
+        String command = action.strip();
+        if (command.toLowerCase().startsWith("console")) {
+            command = command.substring("console".length()).strip();
+        }
+        if (command.contains("%player%")) {
+            plugin.getLogger().warning(
+                    "Console action references %player% but no player is available "
+                    + "(e.g. on-growth) – skipping: " + command);
+            return;
+        }
+        if (command.isEmpty()) {
+            plugin.getLogger().warning("'console' action has no command – skipping.");
+            return;
+        }
+        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

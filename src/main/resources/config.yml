@@ -1,0 +1,40 @@
+# =====================================================================
+# WynversCustomEvents – configuration
+# =====================================================================
+#
+# WynversCustomEvents reads its actions DIRECTLY from the OreStack
+# generator configuration files (one multi-document YAML per generator,
+# stages separated by `---`). No separate actions file is required.
+#
+# Inside any stage of an OreStack generator file, you can now use the
+# following keys:
+#
+#   on-break, on-mine, on-harvest, on-place, on-destroy,
+#   on-hit, on-interact, on-growth
+#
+# Each key is a list of actions. Two equivalent formats are accepted:
+#
+#   on-break:
+#     - do: giveItem NexoItems:enchanted_cobblestone
+#
+#   on-break:
+#     - "giveItem NexoItems:enchanted_cobblestone"
+#
+# Supported action syntax:
+#
+#   giveItem NexoItems:<id>          Give 1 Nexo custom item
+#   giveItem NexoItems:<id> <qty>    Give <qty> Nexo custom items
+#   giveItem <MATERIAL>              Give 1 vanilla Minecraft item
+#   giveItem <MATERIAL> <qty>        Give <qty> vanilla items
+#   runCommand <command>             Run a command as the player
+#   console <command>                Run a command as the console
+#
+#   Placeholder: %player% → replaced with the player's name
+#
+# =====================================================================
+
+# Path to the OreStack generators directory. Relative paths are resolved
+# against the server's working directory (the folder containing the
+# `plugins/` directory). Change this only if your OreStack installation
+# uses a non-default location.
+orestack-generators-path: "plugins/Orestack/generators"

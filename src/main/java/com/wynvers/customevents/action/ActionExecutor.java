@@ -51,7 +51,7 @@ public class ActionExecutor {
             case "runcommand" -> handleRunCommand(action, "runCommand", player, false);
             case "console"    -> handleRunCommand(action, "console", player, true);
             default -> plugin.getLogger().warning(
-                    "Unknown action type '" + parts[0] + "' in actions.yml – skipping.");
+                    "Unknown action type '" + parts[0] + "' in OreStack generator config – skipping.");
         }
     }
 

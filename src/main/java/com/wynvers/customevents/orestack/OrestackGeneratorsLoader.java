@@ -73,7 +73,7 @@ public class OrestackGeneratorsLoader {
             plugin.getLogger().warning(
                     "OreStack generators directory not found at '"
                     + generatorsDir.getAbsolutePath()
-                    + "' – falling back to actions.yml only.");
+                    + "' – no custom actions will be loaded.");
             return;
         }
 

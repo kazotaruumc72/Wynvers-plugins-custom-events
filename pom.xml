@@ -51,6 +51,11 @@
             <id>nexo-repo</id>
             <url>https://repo.nexomc.com/releases</url>
         </repository>
+        <!-- TriumphTeam snapshots (transitive: triumph-gui 3.2.0-SNAPSHOT via Nexo) -->
+        <repository>
+            <id>triumphteam-snapshots</id>
+            <url>https://repo.triumphteam.dev/snapshots/</url>
+        </repository>
     </repositories>
 
     <dependencies>

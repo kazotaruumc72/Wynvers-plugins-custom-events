@@ -1,0 +1,61 @@
+# ============================================================
+# WynversCustomEvents – OreStack custom action configuration
+# File: plugins/WynversCustomEvents/orestack/events/actions.yml
+# ============================================================
+#
+# This file lets you attach custom actions to OreStack generator
+# events.  Each generator section maps to the generator name as
+# defined in OreStack, and each event key lists actions to run
+# when that event fires for a player.
+#
+# Supported event keys:
+#   on-mine      – player mines (left-breaks) a generator block
+#   on-harvest   – player right-clicks/harvests a generator block
+#   on-destroy   – player destroys the generator (health reaches 0)
+#   on-place     – player places a generator
+#   on-hit       – player left-clicks a generator block (no break)
+#   on-interact  – player interacts with a generator block
+#
+# ── Action syntax ────────────────────────────────────────────
+#   giveItem NexoItems:<id>          Give 1 Nexo custom item
+#   giveItem NexoItems:<id> <qty>    Give <qty> Nexo custom items
+#   giveItem <MATERIAL>              Give 1 vanilla Minecraft item
+#   giveItem <MATERIAL> <qty>        Give <qty> vanilla items
+#   runCommand <command>             Run a command as the player
+#   console <command>                Run a command as the console
+#
+#   Placeholder: %player% → replaced with the player's name
+#
+# ── Map format (recommended) ─────────────────────────────────
+#   on-mine:
+#     - do: giveItem NexoItems:enchanted_cobblestone
+#
+# ── Plain list format (also supported) ───────────────────────
+#   on-mine:
+#     - "giveItem NexoItems:enchanted_cobblestone"
+# ============================================================
+
+generators:
+
+  # Example generator named "example_generator" in OreStack config
+  example_generator:
+
+    on-mine:
+      - do: giveItem NexoItems:enchanted_cobblestone
+
+    on-harvest:
+      - do: giveItem NexoItems:enchanted_cobblestone 2
+
+    on-destroy:
+      - do: console say %player% destroyed the generator!
+
+    on-place:
+      - do: console say %player% placed the generator!
+
+  # Add more generators below following the same pattern
+  # another_generator:
+  #   on-mine:
+  #     - do: giveItem NexoItems:custom_sword
+  #     - do: giveItem DIAMOND 1
+  #   on-harvest:
+  #     - do: runCommand say %player% harvested another_generator!

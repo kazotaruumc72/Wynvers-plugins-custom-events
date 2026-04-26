@@ -1,0 +1,24 @@
+name: WynversCustomEvents
+version: '${project.version}'
+main: com.wynvers.customevents.WynversCustomEvents
+api-version: '1.21'
+description: OreStack addon that enables custom Nexo item actions in generator events
+
+authors:
+  - Wynvers
+
+softdepend:
+  - Orestack
+  - Nexo
+
+commands:
+  wcereload:
+    description: Reloads the WynversCustomEvents actions configuration
+    usage: /wcereload
+    permission: wynverscustomevents.reload
+    permission-message: You do not have permission to reload WynversCustomEvents.
+
+permissions:
+  wynverscustomevents.reload:
+    description: Allows reloading the WynversCustomEvents configuration
+    default: op

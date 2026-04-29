@@ -17,6 +17,7 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 /**
  * Protects Nexo custom blocks from Wither / Wither-skull damage.
  *
@@ -59,22 +60,29 @@ public class WitherEventListener implements Listener {
         UUID id = event.getEntity().getUniqueId();
         explosionEntityType.put(id, type);
         protectedThisTick.put(id, new HashSet<>());
-        boolean debug = plugin.getConfig().getBoolean("wither-debug", true);
-        if (debug) plugin.getLogger().info("[WitherDebug] explosion start: " + type
-                + " size=" + event.blockList().size());
-        // ALSO try to remove protected Nexo blocks from blockList for vanilla path.
+        boolean debug = plugin.getConfig().getBoolean("wither-debug", false);
+        int initialSize = event.blockList().size();
+        int removed = 0;
+        // Remove protected Nexo blocks from blockList BEFORE Nexo's own listener runs.
         Iterator<Block> it = event.blockList().iterator();
         while (it.hasNext()) {
             Block b = it.next();
             Resolution r = resolveByBlock(b);
             if (r == null) continue;
-            if ((type == EntityType.WITHER && !r.allowsExplosion()) ||
-                (type == EntityType.WITHER_SKULL && !r.allowsSkull())) {
+            boolean shouldProtect = (type == EntityType.WITHER)
+                    ? r.shouldProtectFromExplosion()
+                    : r.shouldProtectFromSkull();
+            if (shouldProtect) {
                 it.remove();
+                removed++;
                 if (debug) plugin.getLogger().info(
                         "[WitherDebug]   pre-removed " + b.getType() + " @"
                         + b.getX() + "," + b.getY() + "," + b.getZ());
             }
+        }
+        if (removed > 0 || debug) {
+            plugin.getLogger().info("[WitherProperties] " + type
+                    + " explosion: protected " + removed + "/" + initialSize + " block(s).");
         }
     }
     @EventHandler(priority = EventPriority.MONITOR)
@@ -101,13 +109,13 @@ public class WitherEventListener implements Listener {
         if (r == null) return;
         // Find which active wither/skull explosion this break belongs to.
         EntityType current = currentExplosionAround(block);
-        boolean debug = plugin.getConfig().getBoolean("wither-debug", true);
+        boolean debug = plugin.getConfig().getBoolean("wither-debug", false);
         if (debug) plugin.getLogger().info(
                 "[WitherDebug] NexoBlockBreakEvent itemId=" + itemId
                 + " currentExplosion=" + current);
-        if (current == EntityType.WITHER && !r.allowsExplosion()) {
+        if (current == EntityType.WITHER && r.shouldProtectFromExplosion()) {
             event.setCancelled(true);
-        } else if (current == EntityType.WITHER_SKULL && !r.allowsSkull()) {
+        } else if (current == EntityType.WITHER_SKULL && r.shouldProtectFromSkull()) {
             event.setCancelled(true);
         }
     }
@@ -119,7 +127,7 @@ public class WitherEventListener implements Listener {
         if (event.getEntityType() != EntityType.WITHER) return;
         Resolution r = resolveByBlock(event.getBlock());
         if (r == null) return;
-        if (!r.allowsExplosion()) {
+        if (r.shouldProtectFromExplosion()) {
             event.setCancelled(true);
         }
     }
@@ -146,11 +154,19 @@ public class WitherEventListener implements Listener {
         WitherPropertiesMechanicFactory factory = WitherPropertiesMechanicFactory.instance();
         if (factory != null) {
             WitherPropertiesMechanic m = factory.getMechanic(itemId);
-            if (m != null) return new Resolution(m.allowsWitherExplosionDamage(), m.allowsWitherDamageThrow());
+            if (m != null) return new Resolution(
+                    m.allowsWitherExplosionDamage(),
+                    m.allowsWitherDamageThrow(),
+                    m.explosionBreakChancePercent(),
+                    m.skullBreakChancePercent());
         }
         if (fallbackLoader != null) {
             WitherProperties p = fallbackLoader.getProperties(itemId);
-            if (p != null) return new Resolution(p.allowsWitherExplosionDamage(), p.allowsWitherDamageThrow());
+            if (p != null) return new Resolution(
+                    p.allowsWitherExplosionDamage(),
+                    p.allowsWitherDamageThrow(),
+                    p.explosionBreakChancePercent(),
+                    p.skullBreakChancePercent());
         }
         return null;
     }
@@ -169,5 +185,48 @@ public class WitherEventListener implements Listener {
         } catch (Throwable ignored) {}
         return null;
     }
-    private record Resolution(boolean allowsExplosion, boolean allowsSkull) {}
+    /**
+     * Carries the resolution result for a given Nexo block.
+     *
+     * <p>Each "side" (body explosion / skull projectile) has two layers of
+     * configuration:
+     * <ul>
+     *   <li>A boolean flag (e.g. {@code wither_explosion_damage}) – the legacy
+     *       all-or-nothing protection.</li>
+     *   <li>An optional break-chance percentage (e.g.
+     *       {@code wither_explosion_break_block_percent}) – when set, it
+     *       overrides the boolean and gives a per-event probability of being
+     *       broken (0 = always protect, 100 = always break).</li>
+     * </ul>
+     */
+    private record Resolution(
+            boolean allowsExplosion,
+            boolean allowsSkull,
+            int explosionBreakChancePercent,
+            int skullBreakChancePercent) {
+
+        boolean shouldProtectFromExplosion() {
+            return decide(allowsExplosion, explosionBreakChancePercent);
+        }
+        boolean shouldProtectFromSkull() {
+            return decide(allowsSkull, skullBreakChancePercent);
+        }
+
+        /**
+         * @return {@code true} if the block must be removed from the
+         *         explosion (= protected this time); {@code false} if it is
+         *         allowed to break.
+         */
+        private static boolean decide(boolean allows, int chancePercent) {
+            if (chancePercent == WitherPropertiesMechanic.CHANCE_UNSET) {
+                // Legacy boolean: protect when "allows = false".
+                return !allows;
+            }
+            // Probability mode: chancePercent% to break, the rest to protect.
+            // nextInt(100) returns 0..99, so "< chancePercent" gives exactly
+            // chancePercent% of cases breaking.
+            int roll = ThreadLocalRandom.current().nextInt(100);
+            return roll >= chancePercent;
+        }
+    }
 }

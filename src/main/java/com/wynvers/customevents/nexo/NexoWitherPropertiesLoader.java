@@ -75,10 +75,45 @@ public class NexoWitherPropertiesLoader {
                     "wither_damage_throw",
                     "wither-damage-throw",
                     "witherDamageThrow");
-            registry.put(itemId.toLowerCase(), new WitherProperties(explosionDamage, damageThrow));
+            int explosionPct = getPercentWithAliases(
+                    witherSec,
+                    "wither_explosion_break_block_percent",
+                    "wither-explosion-break-block-percent",
+                    "witherExplosionBreakBlockPercent");
+            int skullPct = getPercentWithAliases(
+                    witherSec,
+                    "wither_damage_throw_break_block_percent",
+                    "wither-damage-throw-break-block-percent",
+                    "witherDamageThrowBreakBlockPercent",
+                    "wither_skull_break_block_percent");
+            registry.put(itemId.toLowerCase(), new WitherProperties(
+                    explosionDamage, damageThrow, explosionPct, skullPct));
             plugin.getLogger().info(
-                    "[WitherProperties]  '" + itemId + "' explosion=" + explosionDamage + " skull=" + damageThrow);
+                    "[WitherProperties]  '" + itemId + "' explosion=" + explosionDamage
+                    + " skull=" + damageThrow
+                    + (explosionPct >= 0 ? " explosionBreak%=" + explosionPct : "")
+                    + (skullPct >= 0 ? " skullBreak%=" + skullPct : ""));
         }
+    }
+
+    private int getPercentWithAliases(ConfigurationSection section, String... keys) {
+        for (String k : keys) {
+            if (!section.contains(k)) continue;
+            Object raw = section.get(k);
+            int v;
+            if (raw instanceof Number n) {
+                v = n.intValue();
+            } else if (raw instanceof String s) {
+                try { v = Integer.parseInt(s.trim().replace("%", "")); }
+                catch (NumberFormatException e) { return WitherProperties.CHANCE_UNSET; }
+            } else {
+                return WitherProperties.CHANCE_UNSET;
+            }
+            if (v < 0)   v = 0;
+            if (v > 100) v = 100;
+            return v;
+        }
+        return WitherProperties.CHANCE_UNSET;
     }
 
     private boolean getBooleanWithAliases(ConfigurationSection section, boolean defaultValue, String... keys) {

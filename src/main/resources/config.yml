@@ -45,8 +45,11 @@
 #     wither_properties:
 #       wither_explosion_damage: false   # false = Wither boss explosion cannot destroy this block
 #       wither_damage_throw: false       # false = Wither skull projectile cannot destroy this block
+#       # Optional probabilistic protection (overrides the booleans above):
+#       # wither_explosion_break_block_percent: 30   # 30% chance to break per Wither body explosion
+#       # wither_damage_throw_break_block_percent: 50  # 50% chance to break per Wither skull hit
 #
-# Both values default to true (vanilla behaviour) if omitted.
+# Both booleans default to true (vanilla behaviour) if omitted.
 # Use /wcereload after editing Nexo item files to apply changes without restart.
 # =====================================================================
 
@@ -59,4 +62,9 @@ orestack-generators-path: "plugins/Orestack/generators"
 # Path to the Nexo items directory. Change this only if your Nexo
 # installation uses a non-default location.
 nexo-items-path: "plugins/Nexo/items"
+
+# Enable verbose per-block logging for the wither_properties mechanic.
+# Leave false in production (a single summary line is always logged when
+# at least one block is protected during an explosion).
+wither-debug: false
 

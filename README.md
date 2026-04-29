@@ -1,6 +1,6 @@
 # WynversCustomEvents
 
-An OreStack addon plugin that lets you declare custom actions (Nexo items, vanilla items, commands) **directly inside your OreStack generator configuration files**.
+An OreStack addon plugin that lets you declare custom actions (Nexo items, vanilla items, commands) **directly inside your OreStack generator configuration files**, plus a custom **Nexo `wither_properties` mechanic** to protect Nexo blocks from Wither damage.
 
 ## Features
 
@@ -9,6 +9,7 @@ An OreStack addon plugin that lets you declare custom actions (Nexo items, vanil
 - Give **vanilla Minecraft items** using `giveItem <MATERIAL>`
 - Run commands as the player or as the console
 - Configuration lives **inside the OreStack generator files themselves** – no parallel actions file to maintain
+- New custom Nexo mechanic **`wither_properties`** – per-block control of Wither boss / Wither skull damage (PvP-faction friendly)
 - Hot-reload with `/wcereload`
 
 ## Requirements
@@ -16,8 +17,8 @@ An OreStack addon plugin that lets you declare custom actions (Nexo items, vanil
 | Dependency | Version | Required? |
 |---|---|---|
 | Paper / Spigot | 1.21+ | ✅ Required |
-| OreStack | any | ✅ Required |
-| Nexo | 1.x | ⚠️ Optional (needed for `giveItem NexoItems:`) |
+| OreStack | any | ⚠️ Optional (needed for the OreStack actions feature) |
+| Nexo | 1.16+ (tested on 1.23) | ⚠️ Optional (needed for `giveItem NexoItems:` and `wither_properties`) |
 
 ## Installation
 
@@ -90,17 +91,126 @@ on-break:
 
 ## Configuration – `plugins/WynversCustomEvents/config.yml`
 
-Only one option, used to override the OreStack generators directory if your server uses a non-default location:
+Available options:
 
 ```yaml
+# Path to the OreStack generators directory.
 orestack-generators-path: "plugins/Orestack/generators"
+
+# Path to the Nexo items directory (used to scan wither_properties).
+nexo-items-path: "plugins/Nexo/items"
+
+# Verbose per-block logging for the wither_properties mechanic.
+# Leave false in production; a single summary line is logged whenever at
+# least one block is protected during an explosion.
+wither-debug: false
 ```
+
+## Nexo mechanic – `wither_properties`
+
+A custom Nexo `Mechanic` (registered via `MechanicsManager` exactly like the official [`NexoExampleMechanic`](https://github.com/Nexo-MC/NexoExampleMechanic)) that lets you decide, **per Nexo custom block**, whether the Wither boss can damage it.
+
+### Why it exists
+
+In a faction PvP server, players often want unbreakable base blocks. Vanilla `blast_resistance` doesn't stop the Wither – its body explosion *and* its skull projectiles bypass blast resistance and shred everything. This mechanic gives you fine-grained control directly in your Nexo item file.
+
+### Example item (`plugins/Nexo/items/<file>.yml`)
+
+```yaml
+obsidienne_rouge:
+  itemname: §6Obsidienne Rouge
+  material: OBSIDIAN
+  Pack:
+    parent_model: block/cube_all
+    texture: wynvers/icons/obsidienne_rouge
+  Mechanics:
+    custom_block:
+      block_sounds:
+        break_sound: block.stone.break
+        hit_sound: block.stone.hit
+        place_sound: block.stone.place
+      custom_variation: 282
+      model: obsidienne_rouge
+      hardness: 430
+      drop:
+        loots: []
+      type: NOTEBLOCK
+    wither_properties:
+      wither_explosion_damage: false   # false = Wither body explosion cannot destroy this block
+      wither_damage_throw: false       # false = Wither skull projectile cannot destroy this block
+```
+
+### Keys
+
+| Key | Type | Default | Effect |
+|---|---|---|---|
+| `wither_explosion_damage` | boolean | `true` | All-or-nothing toggle for the **Wither body** explosion. `false` = block is invulnerable. Ignored when `wither_explosion_break_block_percent` is set. |
+| `wither_damage_throw` | boolean | `true` | All-or-nothing toggle for the **Wither skull** projectile. `false` = block is invulnerable. Ignored when `wither_damage_throw_break_block_percent` is set. |
+| `wither_explosion_break_block_percent` | int 0..100 | *unset* | Probability (in %) for the block to **actually break** when caught in a Wither body explosion. `0` → always protected, `100` → always breaks. Overrides `wither_explosion_damage` when present. |
+| `wither_damage_throw_break_block_percent` | int 0..100 | *unset* | Same idea for **Wither skull** projectiles. Overrides `wither_damage_throw` when present. |
+
+Boolean defaults reproduce vanilla behaviour when the section is absent.
+
+### Example – random break chance
+
+```yaml
+obsidienne_orange:
+  itemname: §6Obsidienne Orange
+  material: PAPER
+  Pack:
+    parent_model: block/cube_all
+    texture: wynvers/icons/obsidienne_orange
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 281
+      hardness: 250
+      drop:
+        loots: []
+    wither_properties:
+      wither_explosion_break_block_percent: 30   # 30% chance to break per Wither body explosion
+      # wither_damage_throw_break_block_percent: 50   # (optional) same idea for skulls
+```
+
+With `30`, every time a Wither body explosion would catch this block, the plugin rolls a random number 0–99: a roll `< 30` lets the block break (≈30% of the time), otherwise the block is removed from the explosion list and stays intact.
+
+### How it works (technical)
+
+| Hook | Priority | Purpose |
+|---|---|---|
+| `EntityExplodeEvent` | `LOWEST` | Runs **before** Nexo's own `CustomBlockListener.onEntityExplosion`, removes protected Nexo blocks from `blockList()` so neither vanilla nor Nexo destroys them. |
+| `NexoBlockBreakEvent` | `HIGH` | Safety net – cancels any residual Nexo-driven custom-block break that occurs during an active Wither/skull explosion. |
+| `EntityChangeBlockEvent` | `HIGHEST` | Cancels Wither body contact damage (the boss walking through your blocks). |
+
+Two parallel data sources keep things robust:
+
+1. **Nexo `Mechanic`** registered through the official `MechanicsManager.registerMechanicFactory(...)` API (fired in the `NexoMechanicsRegisteredEvent` handler so it lands in the correct timing window).
+2. **YAML fallback** – the plugin also scans `nexo-items-path` directly, so protections work even if Nexo hadn't parsed our factory yet (e.g. before a `/nexo reload`).
+
+### Production logs
+
+```
+[WynversCustomEvents] [WitherProperties] Loaded wither_properties for 1 item(s).
+[WynversCustomEvents] Registered Nexo mechanic 'wither_properties'.
+[WynversCustomEvents] [WitherProperties] WITHER explosion: protected 590/590 block(s).
+[WynversCustomEvents] [WitherProperties] WITHER_SKULL explosion: protected 4/4 block(s).
+```
+
+Switch `wither-debug: true` in `config.yml` to also get one log line per protected block (useful only when something seems wrong).
+
+### Hot-reload
+
+`/wcereload` reloads:
+- the OreStack generator action keys
+- the YAML scan of `wither_properties`
+
+For the official Nexo `Mechanic` to pick up YAML edits, run `/nexo reload` afterwards.
 
 ## Commands & Permissions
 
 | Command | Permission | Description |
 |---|---|---|
-| `/wcereload` | `wynverscustomevents.reload` (default: op) | Re-scan the OreStack generator files |
+| `/wcereload` | `wynverscustomevents.reload` (default: op) | Re-scan the OreStack generator files **and** the Nexo `wither_properties` YAML data |
 
 ## Building
 

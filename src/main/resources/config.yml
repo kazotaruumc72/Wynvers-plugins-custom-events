@@ -31,6 +31,23 @@
 #
 #   Placeholder: %player% → replaced with the player's name
 #
+# ─────────────────────────────────────────────────────────────────────
+# NEXO – wither_properties mechanic
+# ─────────────────────────────────────────────────────────────────────
+# Add the following section under any Nexo item's Mechanics: block to
+# control Wither damage resistance for that custom block:
+#
+#   Mechanics:
+#     custom_block:
+#       type: NOTEBLOCK
+#       custom_variation: 284
+#       hardness: 30
+#     wither_properties:
+#       wither_explosion_damage: false   # false = Wither boss explosion cannot destroy this block
+#       wither_damage_throw: false       # false = Wither skull projectile cannot destroy this block
+#
+# Both values default to true (vanilla behaviour) if omitted.
+# Use /wcereload after editing Nexo item files to apply changes without restart.
 # =====================================================================
 
 # Path to the OreStack generators directory. Relative paths are resolved
@@ -38,3 +55,8 @@
 # `plugins/` directory). Change this only if your OreStack installation
 # uses a non-default location.
 orestack-generators-path: "plugins/Orestack/generators"
+
+# Path to the Nexo items directory. Change this only if your Nexo
+# installation uses a non-default location.
+nexo-items-path: "plugins/Nexo/items"
+

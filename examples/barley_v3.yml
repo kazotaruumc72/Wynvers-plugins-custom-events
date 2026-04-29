@@ -1,0 +1,128 @@
+# =====================================================================
+# Place this file in:  plugins/Nexo/items/barley.yml
+# Then run in-game:    /nexo reload items
+# =====================================================================
+# 'farmer' est maintenant une VRAIE mecanique Nexo enregistree par
+# Wynvers via FarmerMechanicFactory (meme pattern que wither_properties).
+# Elle se place donc DIRECTEMENT sous Mechanics: (au meme niveau que
+# 'furniture:'), pas dedans.
+#
+# Champs supportes :
+#   delay, probability_percent, next_stage
+#   light_boost      (true => +25% si lumiere >= 9)
+#   requires_farmland (true par defaut)
+#   biome_whitelist / biome_blacklist
+#   min_y / max_y
+#   on_grow:  liste d'actions a la transformation
+#   on_final: liste d'actions au stage terminal (pas de next_stage)
+#   boss: { chance_percent, actions }   <-- futur boss de metier
+#
+# Placeholders : {x} {y} {z} {world} {item} {next}
+# Format actions : "console <commande>"
+# =====================================================================
+
+barley:
+  itemname: "<gradient:#46EEAA:#2CBFC7>Orge"
+  material: PAPER
+  Pack:
+    model: old_mallard:crops/om_barley
+
+
+barley_seed:
+  itemname: "<gradient:#46EEAA:#2CBFC7>Graine d'orge"
+  material: PAPER
+  Mechanics:
+    furniture:
+      properties:
+        display_transform: NONE
+    farmer:
+      delay: 10s
+      probability_percent: 100
+      next_stage: barley_plant_stage1
+      requires_farmland: true
+  Pack:
+    model: old_mallard:seeds/om_barley_seeds
+
+
+barley_plant_stage1:
+  material: PAPER
+  Mechanics:
+    furniture:
+      properties:
+        display_transform: NONE
+    farmer:
+      delay: 10s
+      probability_percent: 50
+      next_stage: barley_plant_stage2
+      light_boost: true
+  Pack:
+    model: old_mallard:planted_crops/om_barley_1
+
+barley_plant_stage2:
+  material: PAPER
+  Mechanics:
+    furniture:
+      properties:
+        display_transform: NONE
+    farmer:
+      delay: 10s
+      probability_percent: 50
+      next_stage: barley_plant_stage3
+      light_boost: true
+  Pack:
+    model: old_mallard:planted_crops/om_barley_2
+
+barley_plant_stage3:
+  material: PAPER
+  Mechanics:
+    furniture:
+      properties:
+        display_transform: NONE
+    farmer:
+      delay: 10s
+      probability_percent: 50
+      next_stage: barley_plant_stage4
+      light_boost: true
+  Pack:
+    model: old_mallard:planted_crops/om_barley_3
+
+barley_plant_stage4:
+  material: PAPER
+  Mechanics:
+    furniture:
+      properties:
+        display_transform: NONE
+      drop:
+        silktouch: true
+    farmer:
+      delay: 10s
+      probability_percent: 50
+      next_stage: barley_plant_stage5
+      light_boost: true
+  Pack:
+    model: old_mallard:planted_crops/om_barley_4
+
+# Stage final : pas de next_stage. on_final + boss declenches.
+barley_plant_stage5:
+  material: PAPER
+  Mechanics:
+    furniture:
+      properties:
+        display_transform: NONE
+      drop:
+        drops:
+          - { nexo_item: barley_seed, max_amount: 1, probability: 0.5 }
+          - { nexo_item: barley,      max_amount: 2, probability: 1.0 }
+    farmer:
+      delay: 30s
+      probability_percent: 100
+      on_final:
+        - "console execute in {world} run particle minecraft:happy_villager {x} {y} {z} 0.4 0.4 0.4 0 12"
+      boss:
+        chance_percent: 5
+        actions:
+          - "console say §6Un Boss du Fermier vient d'apparaitre en {x},{y},{z} !"
+          - "console execute in {world} run summon zombie {x} {y} {z}"
+  Pack:
+    model: old_mallard:planted_crops/om_barley_5
+

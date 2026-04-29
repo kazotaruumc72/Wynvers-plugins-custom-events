@@ -2,8 +2,10 @@ package com.wynvers.customevents;
 
 import com.wynvers.customevents.listener.OrestackEventListener;
 import com.wynvers.customevents.listener.WitherEventListener;
+import com.wynvers.customevents.listener.FarmerEventListener;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
+import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -36,6 +38,7 @@ public class WynversCustomEvents extends JavaPlugin {
     private OrestackEventListener orestackListener;
     private NexoWitherPropertiesLoader nexoWitherLoader;
     private WitherEventListener witherListener;
+    private FarmerEventListener farmerListener;
 
     @Override
     public void onEnable() {
@@ -73,9 +76,15 @@ public class WynversCustomEvents extends JavaPlugin {
                             getLogger().info("Registered Nexo mechanic '"
                                     + WitherPropertiesMechanicFactory.MECHANIC_ID + "'.");
                         }
+                        if (FarmerMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new FarmerMechanicFactory(), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + FarmerMechanicFactory.MECHANIC_ID + "'.");
+                        }
                     } catch (Throwable t) {
                         getLogger().warning(
-                                "Failed to register 'wither_properties' Nexo mechanic: " + t.getMessage());
+                                "Failed to register custom Nexo mechanic: " + t.getMessage());
                     }
                 }
             }, this);
@@ -86,6 +95,11 @@ public class WynversCustomEvents extends JavaPlugin {
             witherListener = new WitherEventListener(this, nexoWitherLoader);
             Bukkit.getPluginManager().registerEvents(witherListener, this);
             getLogger().info("Nexo wither_properties mechanic enabled.");
+
+            // Farmer mechanic (real Nexo Mechanic – parsed by Nexo via FarmerMechanicFactory)
+            farmerListener = new FarmerEventListener(this);
+            Bukkit.getPluginManager().registerEvents(farmerListener, this);
+            getLogger().info("Nexo farmer mechanic enabled.");
         } else {
             getLogger().warning("Nexo not found - 'giveItem NexoItems:' actions will be skipped.");
         }

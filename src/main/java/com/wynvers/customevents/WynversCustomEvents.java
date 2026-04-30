@@ -4,6 +4,7 @@ import com.wynvers.customevents.listener.OrestackEventListener;
 import com.wynvers.customevents.listener.WitherEventListener;
 import com.wynvers.customevents.listener.FarmerEventListener;
 import com.wynvers.customevents.listener.HarvesterEventListener;
+import com.wynvers.customevents.listener.SeedCooldownListener;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
@@ -114,6 +115,11 @@ public class WynversCustomEvents extends JavaPlugin {
             harvesterListener = new HarvesterEventListener(this);
             Bukkit.getPluginManager().registerEvents(harvesterListener, this);
             getLogger().info("Harvester mechanic enabled.");
+
+            // Seed cooldown: forces use_cooldown=0 on farmer seed items so
+            // they place their furniture instantly on right-click.
+            Bukkit.getPluginManager().registerEvents(new SeedCooldownListener(this), this);
+            getLogger().info("Seed use_cooldown=0 enforcement enabled.");
         } else {
             getLogger().warning("Nexo not found - 'giveItem NexoItems:' actions will be skipped.");
         }

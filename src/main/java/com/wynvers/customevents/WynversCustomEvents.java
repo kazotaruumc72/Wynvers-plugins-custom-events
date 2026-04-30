@@ -5,10 +5,12 @@ import com.wynvers.customevents.listener.WitherEventListener;
 import com.wynvers.customevents.listener.FarmerEventListener;
 import com.wynvers.customevents.listener.SeedPlantListener;
 import com.wynvers.customevents.listener.HarvesterEventListener;
+import com.wynvers.customevents.listener.HarvestingToolListener;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
 import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
+import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -92,6 +94,12 @@ public class WynversCustomEvents extends JavaPlugin {
                             getLogger().info("Registered Nexo mechanic '"
                                     + HarvesterMechanicFactory.MECHANIC_ID + "'.");
                         }
+                        if (HarvestingMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new HarvestingMechanicFactory(), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + HarvestingMechanicFactory.MECHANIC_ID + "'.");
+                        }
                     } catch (Throwable t) {
                         getLogger().warning(
                                 "Failed to register custom Nexo mechanic: " + t.getMessage());
@@ -122,6 +130,11 @@ public class WynversCustomEvents extends JavaPlugin {
             harvesterListener = new HarvesterEventListener(this);
             Bukkit.getPluginManager().registerEvents(harvesterListener, this);
             getLogger().info("Harvester mechanic enabled.");
+
+            // Harvesting mechanic: right-click with a tool to mass-harvest
+            // every farmer-final-stage furniture in range.
+            Bukkit.getPluginManager().registerEvents(new HarvestingToolListener(this), this);
+            getLogger().info("Harvesting tool mechanic enabled.");
         } else {
             getLogger().warning("Nexo not found - 'giveItem NexoItems:' actions will be skipped.");
         }

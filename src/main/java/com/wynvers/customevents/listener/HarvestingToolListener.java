@@ -84,7 +84,8 @@ public class HarvestingToolListener implements Listener {
         }
 
         if (event.getHand() != EquipmentSlot.HAND) return;
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK
+                && event.getAction() != Action.RIGHT_CLICK_AIR) return;
 
         ItemStack tool = event.getItem();
         if (tool == null || tool.getType().isAir()) return;
@@ -101,7 +102,27 @@ public class HarvestingToolListener implements Listener {
         }
 
         Block clicked = event.getClickedBlock();
-        if (clicked == null) return;
+
+        // Cas RIGHT_CLICK_AIR : aucun bloc cliqué (typiquement: la furniture
+        // visée n'a pas de hitbox -> le raycast traverse). On fait un radar
+        // centré devant le joueur (à 2 blocs en face de ses yeux).
+        if (clicked == null) {
+            Player p = event.getPlayer();
+            Location eye = p.getEyeLocation();
+            Location ahead = eye.clone().add(eye.getDirection().multiply(2.0));
+            ItemDisplay found = findFurnitureInRadius(
+                    ahead, mechanic.radius(), mechanic.height());
+            if (found == null) {
+                plugin.getLogger().info("[Harvesting]   AIR click: no furniture within "
+                        + "r=" + mechanic.radius() + " h=" + mechanic.height()
+                        + " around player look-direction.");
+                return;
+            }
+            plugin.getLogger().info("[Harvesting]   AIR click: radar picked furniture, harvesting!");
+            event.setCancelled(true);
+            triggerHarvest(p, tool, mechanic, found);
+            return;
+        }
 
         // 1) Furniture exactement sur le bloc cliqué (cas barrier block)
         ItemDisplay clickedFurniture = NexoFurniture.baseEntity(clicked.getLocation());

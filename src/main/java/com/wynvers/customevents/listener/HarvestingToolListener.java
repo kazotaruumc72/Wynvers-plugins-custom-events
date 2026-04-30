@@ -66,7 +66,7 @@ public class HarvestingToolListener implements Listener {
     // -------------------------------------------------------------------------
     // ignoreCancelled = false : un autre plugin (Nexo, vanilla farmland...) peut
     // annuler le HAND event avant qu'on le voie. On veut quand même le traiter.
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
     public void onInteractBlock(PlayerInteractEvent event) {
         // VERY VERBOSE – log EVERY right-click while we debug
         if (event.getAction() == Action.RIGHT_CLICK_BLOCK
@@ -167,7 +167,7 @@ public class HarvestingToolListener implements Listener {
     // PlayerInteractEntityEvent: right-click on an Interaction entity
     // (entity-only furnitures use this)
     // -------------------------------------------------------------------------
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
     public void onInteractEntity(PlayerInteractEntityEvent event) {
         // VERY VERBOSE
         ItemStack hand = event.getPlayer().getInventory().getItemInMainHand();
@@ -180,7 +180,7 @@ public class HarvestingToolListener implements Listener {
         handleEntityClick(event.getPlayer(), event.getRightClicked(), event, "InteractEntity");
     }
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
     public void onInteractAtEntity(PlayerInteractAtEntityEvent event) {
         // VERY VERBOSE
         ItemStack hand = event.getPlayer().getInventory().getItemInMainHand();

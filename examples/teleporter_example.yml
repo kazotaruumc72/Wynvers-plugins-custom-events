@@ -1,0 +1,36 @@
+# Example teleporter items for Nexo
+# This file shows how to configure teleporter items
+
+# Base teleporter item - use this to start configuring a new teleporter
+teleporter_base:
+  itemname: "§6Teleporter Configuration Tool"
+  material: PAPER
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: "476"
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_bettersnow/snow
+
+# Example of an auto-generated teleporter created via the setup system
+# After placing the teleporter_base and completing the setup prompts,
+# a new item like this will be created:
+# donjon_1_zone_1:
+#   itemname: Teleporter
+#   material: PAPER
+#   Mechanics:
+#     custom_block:
+#       type: NOTEBLOCK
+#       custom_variation: "476"
+#     teleporter:
+#       world: "donjons"
+#       x: "90"
+#       y: "120"
+#       z: "90"
+#       yaw: "90"
+#       pitch: "0"
+#   Pack:
+#     parent_model: block/cube_all
+#     texture: fischvogel:fv_bettersnow/snow
+

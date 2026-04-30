@@ -1,0 +1,63 @@
+# Wynvers Custom Events - Teleporter Items Configuration
+#
+# INSTALLATION:
+# 1. Placez ce fichier dans: plugins/Nexo/items/
+# 2. Nommez-le: wynvers_teleporter.yml
+# 3. Exécutez: /nexo reload
+#
+# UTILISATION:
+# - Donnez au joueur: /give @p paper{NexoID:"teleporter_base"}
+# - Le joueur pose le bloc
+# - Suivez les 7 menus de configuration
+# - Une fois complété, /nexo reload à nouveau
+#
+
+# ============================================================================
+# TELEPORTER BASE - Bloc de configuration
+# ============================================================================
+# Utilisez ce bloc pour CONFIGURER les nouveaux téléporteurs
+# Pointez et cassez -> La séquence de configuration démarre
+
+teleporter_base:
+  itemname: "§6§lTeleporter Configuration Tool"
+  material: PAPER
+  lore:
+    - "§7Clic droit pour configurer"
+    - "§7un nouveau téléporteur"
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: "476"
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_bettersnow/snow
+
+
+# ============================================================================
+# EXEMPLE - Téléporteur d'exemple
+# ============================================================================
+# Cet exemple montre à quoi ressemble un téléporteur créé automatiquement
+# Il n'existe que comme exemple - sera créé automatiquement lors de la
+# configuration interactive
+
+# example_teleporter:
+#   itemname: "§aExample Teleporter"
+#   lore:
+#     - "§7Destination: example_world"
+#     - "§7Coords: 100, 64, 100"
+#   material: PAPER
+#   Mechanics:
+#     custom_block:
+#       type: NOTEBLOCK
+#       custom_variation: "476"
+#     teleporter:
+#       world: "example_world"
+#       x: "100"
+#       y: "64"
+#       z: "100"
+#       yaw: "0"
+#       pitch: "0"
+#   Pack:
+#     parent_model: block/cube_all
+#     texture: fischvogel:fv_bettersnow/snow
+

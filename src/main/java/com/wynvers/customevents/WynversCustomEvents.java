@@ -6,11 +6,14 @@ import com.wynvers.customevents.listener.FarmerEventListener;
 import com.wynvers.customevents.listener.SeedPlantListener;
 import com.wynvers.customevents.listener.HarvesterEventListener;
 import com.wynvers.customevents.listener.HarvestingToolListener;
+import com.wynvers.customevents.listener.TeleporterInputListener;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
 import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
+import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
+import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -45,6 +48,7 @@ public class WynversCustomEvents extends JavaPlugin {
     private WitherEventListener witherListener;
     private FarmerEventListener farmerListener;
     private HarvesterEventListener harvesterListener;
+    private TeleporterSetupManager teleporterSetupManager;
 
     @Override
     public void onEnable() {
@@ -66,7 +70,7 @@ public class WynversCustomEvents extends JavaPlugin {
         if (Bukkit.getPluginManager().getPlugin("Nexo") != null) {
             getLogger().info("Nexo integration enabled.");
 
-            // Register our custom Nexo mechanic via NexoMechanicsRegisteredEvent.
+            // Register our custom Nexo mechanics via NexoMechanicsRegisteredEvent.
             // This is the correct timing: Nexo fires this event right before
             // it parses items, which is the only window where a third-party
             // factory can be registered AND applied to all items on first load.
@@ -99,6 +103,12 @@ public class WynversCustomEvents extends JavaPlugin {
                                     .registerMechanicFactory(new HarvestingMechanicFactory(), true);
                             getLogger().info("Registered Nexo mechanic '"
                                     + HarvestingMechanicFactory.MECHANIC_ID + "'.");
+                        }
+                        if (TeleporterMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new TeleporterMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + TeleporterMechanicFactory.MECHANIC_ID + "'.");
                         }
                     } catch (Throwable t) {
                         getLogger().warning(
@@ -135,6 +145,12 @@ public class WynversCustomEvents extends JavaPlugin {
             // every farmer-final-stage furniture in range.
             Bukkit.getPluginManager().registerEvents(new HarvestingToolListener(this), this);
             getLogger().info("Harvesting tool mechanic enabled.");
+
+            // Teleporter setup wizard (block place + chat input)
+            teleporterSetupManager = new TeleporterSetupManager();
+            Bukkit.getPluginManager().registerEvents(
+                    new TeleporterInputListener(this, teleporterSetupManager), this);
+            getLogger().info("Teleporter mechanic enabled.");
         } else {
             getLogger().warning("Nexo not found - 'giveItem NexoItems:' actions will be skipped.");
         }

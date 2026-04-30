@@ -68,3 +68,28 @@ nexo-items-path: "plugins/Nexo/items"
 # at least one block is protected during an explosion).
 wither-debug: false
 
+# ─────────────────────────────────────────────────────────────────────
+# HARVESTER mechanic
+# ─────────────────────────────────────────────────────────────────────
+# When a player right-clicks a Nexo furniture with a tool, the harvester
+# scans nearby furnitures and damages the tool for each one found.
+#
+# Configuration:
+#   harvester-scan-radius: radius in blocks to scan around the clicked furniture
+#   harvester-scan-height: height in blocks to scan up and down
+#   harvester-damage-per-item: durability damage per furniture found
+#   harvester-debug: enable verbose logging
+#
+
+# Radius (in blocks) to scan for nearby furnitures when harvesting
+harvester-scan-radius: 3
+
+# Height (in blocks) to scan above and below the clicked position
+harvester-scan-height: 2
+
+# Durability damage to apply per furniture found (damage applies even in creative)
+harvester-damage-per-item: 1
+
+# Enable verbose logging for the harvester mechanic (debug mode)
+harvester-debug: false
+

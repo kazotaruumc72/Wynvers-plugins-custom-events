@@ -3,6 +3,7 @@ package com.wynvers.customevents;
 import com.wynvers.customevents.listener.OrestackEventListener;
 import com.wynvers.customevents.listener.WitherEventListener;
 import com.wynvers.customevents.listener.FarmerEventListener;
+import com.wynvers.customevents.listener.HarvesterEventListener;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
@@ -39,6 +40,7 @@ public class WynversCustomEvents extends JavaPlugin {
     private NexoWitherPropertiesLoader nexoWitherLoader;
     private WitherEventListener witherListener;
     private FarmerEventListener farmerListener;
+    private HarvesterEventListener harvesterListener;
 
     @Override
     public void onEnable() {
@@ -100,6 +102,11 @@ public class WynversCustomEvents extends JavaPlugin {
             farmerListener = new FarmerEventListener(this);
             Bukkit.getPluginManager().registerEvents(farmerListener, this);
             getLogger().info("Nexo farmer mechanic enabled.");
+
+            // Harvester mechanic: right-click on furniture to harvest items and damage tool
+            harvesterListener = new HarvesterEventListener(this);
+            Bukkit.getPluginManager().registerEvents(harvesterListener, this);
+            getLogger().info("Harvester mechanic enabled.");
         } else {
             getLogger().warning("Nexo not found - 'giveItem NexoItems:' actions will be skipped.");
         }

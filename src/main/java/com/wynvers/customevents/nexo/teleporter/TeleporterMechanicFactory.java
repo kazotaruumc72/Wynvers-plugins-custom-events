@@ -1,12 +1,14 @@
 package com.wynvers.customevents.nexo.teleporter;
 
-import com.nexomc.nexo.api.NexoFurniture;
+import com.nexomc.nexo.api.NexoBlocks;
 import com.nexomc.nexo.mechanics.Mechanic;
 import com.nexomc.nexo.mechanics.MechanicFactory;
+import com.nexomc.nexo.mechanics.custom_block.CustomBlockMechanic;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.entity.ItemDisplay;
+
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -66,17 +68,21 @@ public class TeleporterMechanicFactory extends MechanicFactory implements Listen
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onPlayerMove(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        Location playerLoc = player.getLocation();
-
-        if (playerLoc.getBlockX() == event.getFrom().getBlockX() &&
-            playerLoc.getBlockY() == event.getFrom().getBlockY() &&
-            playerLoc.getBlockZ() == event.getFrom().getBlockZ()) {
+        if (event.getTo() == null) return;
+        if (event.getTo().getBlockX() == event.getFrom().getBlockX() &&
+            event.getTo().getBlockY() == event.getFrom().getBlockY() &&
+            event.getTo().getBlockZ() == event.getFrom().getBlockZ()) {
             return;
         }
 
-        ItemDisplay teleporter = findTeleporterAt(playerLoc);
-        if (teleporter == null) return;
+        Player player = event.getPlayer();
+        Block blockBelow = player.getLocation().getBlock().getRelative(BlockFace.DOWN);
+
+        CustomBlockMechanic blockMechanic = NexoBlocks.customBlockMechanic(blockBelow);
+        if (blockMechanic == null) return;
+
+        TeleporterMechanic mechanic = getMechanic(blockMechanic.getItemID());
+        if (mechanic == null) return;
 
         UUID playerId = player.getUniqueId();
         long now = System.currentTimeMillis();
@@ -84,34 +90,7 @@ public class TeleporterMechanicFactory extends MechanicFactory implements Listen
         if (lastTele != null && (now - lastTele) < TELEPORT_COOLDOWN_MS) return;
         lastTeleport.put(playerId, now);
 
-        var furnMech = NexoFurniture.furnitureMechanic(teleporter);
-        if (furnMech == null) return;
-
-        String furnitureId = furnMech.getItemID();
-        if (furnitureId == null) return;
-
-        TeleporterMechanic mechanic = getMechanic(furnitureId);
-        if (mechanic == null) return;
-
         mechanic.teleport(player);
-    }
-
-    private ItemDisplay findTeleporterAt(Location loc) {
-        if (loc.getWorld() == null) return null;
-
-        for (ItemDisplay display : loc.getWorld().getEntitiesByClass(ItemDisplay.class)) {
-            if (!display.getLocation().getBlock().equals(loc.getBlock())) continue;
-            try {
-                var furnMech = NexoFurniture.furnitureMechanic(display);
-                if (furnMech == null) continue;
-
-                String itemId = furnMech.getItemID();
-                if (itemId == null) continue;
-
-                if (getMechanic(itemId) != null) return display;
-            } catch (Throwable ignored) {}
-        }
-        return null;
     }
 }
 

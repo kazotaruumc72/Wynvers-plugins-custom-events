@@ -1,5 +1,6 @@
 package com.wynvers.customevents.listener;
 
+import com.nexomc.nexo.api.events.custom_block.NexoBlockPlaceEvent;
 import com.wynvers.customevents.WynversCustomEvents;
 import com.wynvers.customevents.nexo.teleporter.TeleporterConfigGenerator;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
@@ -8,17 +9,17 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
 
 /**
- * Handles the teleporter setup flow: block placement triggers the wizard,
+ * Handles the teleporter setup flow: custom block placement triggers the wizard,
  * and chat input drives it step by step.
  */
 public class TeleporterInputListener implements Listener {
+
+    private static final String TELEPORTER_BASE_ID = "teleporter_base";
 
     private final WynversCustomEvents plugin;
     private final TeleporterSetupManager setupManager;
@@ -31,15 +32,12 @@ public class TeleporterInputListener implements Listener {
         this.configGenerator = new TeleporterConfigGenerator(nexoItemsDir);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onBlockPlace(BlockPlaceEvent event) {
-        if (event.isCancelled()) return;
-        Player player = event.getPlayer();
-        ItemStack itemInHand = player.getInventory().getItemInMainHand();
-        if (itemInHand.getType().isAir()) return;
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onNexoBlockPlace(NexoBlockPlaceEvent event) {
+        if (!TELEPORTER_BASE_ID.equals(event.getMechanic().getItemID())) return;
 
-        String itemId = safeIdFromItem(itemInHand);
-        if (!"teleporter_base".equals(itemId)) return;
+        Player player = event.getPlayer();
+        if (player == null) return;
 
         setupManager.startSetup(player);
     }
@@ -79,11 +77,4 @@ public class TeleporterInputListener implements Listener {
         });
     }
 
-    private static String safeIdFromItem(ItemStack item) {
-        try {
-            return com.nexomc.nexo.api.NexoItems.idFromItem(item);
-        } catch (Throwable t) {
-            return null;
-        }
-    }
 }

@@ -89,6 +89,15 @@ public class FarmerEventListener implements Listener {
                 Math.max(1L, data.delayTicks()));
     }
 
+    /**
+     * Public API used by {@code SeedPlaceListener} after a manual placement
+     * (i.e. when {@link com.nexomc.nexo.api.events.furniture.NexoFurniturePlaceEvent}
+     * was bypassed).
+     */
+    public void onManualPlacement(String currentItemId, Location loc, FarmerMechanic data) {
+        scheduleGrowth(currentItemId, loc, data);
+    }
+
     private void tick(String currentItemId, Location loc, FarmerMechanic data) {
         ItemDisplay current = NexoFurniture.baseEntity(loc);
         if (current == null) {

@@ -94,12 +94,7 @@ public class HarvestingToolListener implements Listener {
         if (toolId == null) return;
 
         HarvestingMechanic mechanic = mechanicFor(tool);
-        if (mechanic == null) {
-            plugin.getLogger().warning("[Harvesting] '" + toolId
-                    + "' has NO 'harvesting' mechanic! Did you /nexo reload all? "
-                    + "(factory=" + (HarvestingMechanicFactory.instance() != null ? "OK" : "NULL") + ")");
-            return;
-        }
+        if (mechanic == null) return; // pas une houe harvesting, on ignore silencieusement
 
         Block clicked = event.getClickedBlock();
 
@@ -206,11 +201,7 @@ public class HarvestingToolListener implements Listener {
                 + "' on entity type=" + entity.getType());
 
         HarvestingMechanic mechanic = mechanicFor(tool);
-        if (mechanic == null) {
-            plugin.getLogger().warning("[Harvesting] '" + toolId
-                    + "' has NO 'harvesting' mechanic! Did you /nexo reload all?");
-            return;
-        }
+        if (mechanic == null) return; // pas une houe harvesting, on ignore silencieusement
 
         // Find the underlying Nexo furniture base entity
         ItemDisplay base;
@@ -286,6 +277,7 @@ public class HarvestingToolListener implements Listener {
 
         int scanned = 0;
         int harvested = 0;
+        java.util.Map<String, Integer> rejectReasons = new java.util.HashMap<>();
 
         for (ItemDisplay display : center.getWorld().getEntitiesByClass(ItemDisplay.class)) {
             Location loc = display.getLocation();
@@ -298,11 +290,20 @@ public class HarvestingToolListener implements Listener {
             scanned++;
 
             String furnitureId = furnMech.getItemID();
-            if (furnitureId == null) continue;
+            if (furnitureId == null) {
+                rejectReasons.merge("[null itemID]", 1, Integer::sum);
+                continue;
+            }
 
             FarmerMechanic farmer = farmerFactory.getMechanic(furnitureId);
-            if (farmer == null) continue;
-            if (farmer.hasNextStage()) continue;
+            if (farmer == null) {
+                rejectReasons.merge(furnitureId + " [no farmer mechanic]", 1, Integer::sum);
+                continue;
+            }
+            if (farmer.hasNextStage()) {
+                rejectReasons.merge(furnitureId + " [hasNextStage=" + farmer.nextStageItemId() + "]", 1, Integer::sum);
+                continue;
+            }
 
             // Fire BlockBreakEvent first so other plugins (Jobs, etc.) count it
             Block furnBlock = display.getLocation().getBlock();
@@ -324,6 +325,9 @@ public class HarvestingToolListener implements Listener {
 
         plugin.getLogger().info("[Harvesting]   scanned " + scanned
                 + " furniture(s), harvested " + harvested);
+        if (harvested == 0 && !rejectReasons.isEmpty()) {
+            plugin.getLogger().info("[Harvesting]   reject breakdown: " + rejectReasons);
+        }
 
         if (harvested > 0) {
             damageTool(tool, harvested);

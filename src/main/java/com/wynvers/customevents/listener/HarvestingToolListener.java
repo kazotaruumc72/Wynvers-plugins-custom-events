@@ -56,9 +56,6 @@ public class HarvestingToolListener implements Listener {
 
     public HarvestingToolListener(WynversCustomEvents plugin) {
         this.plugin = plugin;
-        plugin.getLogger().info("[Harvesting] Listener instantiated. "
-                + "HarvestingMechanicFactory.instance="
-                + (HarvestingMechanicFactory.instance() != null ? "OK" : "NULL"));
     }
 
     // -------------------------------------------------------------------------
@@ -68,21 +65,6 @@ public class HarvestingToolListener implements Listener {
     // annuler le HAND event avant qu'on le voie. On veut quand même le traiter.
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
     public void onInteractBlock(PlayerInteractEvent event) {
-        // VERY VERBOSE – log EVERY right-click while we debug
-        if (event.getAction() == Action.RIGHT_CLICK_BLOCK
-                || event.getAction() == Action.RIGHT_CLICK_AIR) {
-            ItemStack hand = event.getItem();
-            plugin.getLogger().info("[Harvesting][TRACE] PlayerInteractEvent action="
-                    + event.getAction() + " hand=" + event.getHand()
-                    + " item=" + (hand == null ? "null" : hand.getType())
-                    + " nexoId=" + (hand == null ? "-" : safeIdFromItem(hand))
-                    + " block=" + (event.getClickedBlock() != null
-                            ? event.getClickedBlock().getType() : "AIR")
-                    + " cancelled=" + event.isCancelled()
-                    + " useItem=" + event.useItemInHand()
-                    + " useBlock=" + event.useInteractedBlock());
-        }
-
         if (event.getHand() != EquipmentSlot.HAND) return;
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK
                 && event.getAction() != Action.RIGHT_CLICK_AIR) return;
@@ -108,12 +90,8 @@ public class HarvestingToolListener implements Listener {
             ItemDisplay found = findFurnitureInRadius(
                     ahead, mechanic.radius(), mechanic.height());
             if (found == null) {
-                plugin.getLogger().info("[Harvesting]   AIR click: no furniture within "
-                        + "r=" + mechanic.radius() + " h=" + mechanic.height()
-                        + " around player look-direction.");
                 return;
             }
-            plugin.getLogger().info("[Harvesting]   AIR click: radar picked furniture, harvesting!");
             event.setCancelled(true);
             triggerHarvest(p, tool, mechanic, found);
             return;
@@ -138,22 +116,12 @@ public class HarvestingToolListener implements Listener {
             Location scanCenter = above.getLocation().add(0.5, 0.5, 0.5);
             clickedFurniture = findFurnitureInRadius(
                     scanCenter, mechanic.radius(), mechanic.height());
-            if (clickedFurniture != null) {
-                plugin.getLogger().info("[Harvesting]   no furniture at click, "
-                        + "radar scan picked one within r=" + mechanic.radius()
-                        + " h=" + mechanic.height() + " (centered above clicked block)");
-            }
         }
 
         if (clickedFurniture == null) {
-            plugin.getLogger().info("[Harvesting]   block " + clicked.getType()
-                    + " at " + clicked.getX() + "," + clicked.getY() + "," + clicked.getZ()
-                    + " is NOT a Nexo furniture base, and no furniture found above "
-                    + "or within radar (r=" + mechanic.radius() + " h=" + mechanic.height() + ").");
             return;
         }
 
-        plugin.getLogger().info("[Harvesting]   found furniture base entity, harvesting!");
         event.setCancelled(true);
         triggerHarvest(event.getPlayer(), tool, mechanic, clickedFurniture);
     }
@@ -164,41 +132,23 @@ public class HarvestingToolListener implements Listener {
     // -------------------------------------------------------------------------
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
     public void onInteractEntity(PlayerInteractEntityEvent event) {
-        // VERY VERBOSE
-        ItemStack hand = event.getPlayer().getInventory().getItemInMainHand();
-        plugin.getLogger().info("[Harvesting][TRACE] PlayerInteractEntityEvent hand="
-                + event.getHand() + " entityType=" + event.getRightClicked().getType()
-                + " mainItem=" + hand.getType()
-                + " nexoId=" + safeIdFromItem(hand));
-
         if (event.getHand() != EquipmentSlot.HAND) return;
-        handleEntityClick(event.getPlayer(), event.getRightClicked(), event, "InteractEntity");
+        handleEntityClick(event.getPlayer(), event.getRightClicked(), event);
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
     public void onInteractAtEntity(PlayerInteractAtEntityEvent event) {
-        // VERY VERBOSE
-        ItemStack hand = event.getPlayer().getInventory().getItemInMainHand();
-        plugin.getLogger().info("[Harvesting][TRACE] PlayerInteractAtEntityEvent hand="
-                + event.getHand() + " entityType=" + event.getRightClicked().getType()
-                + " mainItem=" + hand.getType()
-                + " nexoId=" + safeIdFromItem(hand));
-
         if (event.getHand() != EquipmentSlot.HAND) return;
-        handleEntityClick(event.getPlayer(), event.getRightClicked(), event, "InteractAtEntity");
+        handleEntityClick(event.getPlayer(), event.getRightClicked(), event);
     }
 
     private void handleEntityClick(Player player, Entity entity,
-                                   org.bukkit.event.Cancellable cancellable,
-                                   String evtName) {
+                                   org.bukkit.event.Cancellable cancellable) {
         ItemStack tool = player.getInventory().getItemInMainHand();
         if (tool.getType().isAir()) return;
 
         String toolId = safeIdFromItem(tool);
         if (toolId == null) return;
-
-        plugin.getLogger().info("[Harvesting] >>> " + evtName + " with Nexo item '" + toolId
-                + "' on entity type=" + entity.getType());
 
         HarvestingMechanic mechanic = mechanicFor(tool);
         if (mechanic == null) return; // pas une houe harvesting, on ignore silencieusement
@@ -215,19 +165,12 @@ public class HarvestingToolListener implements Listener {
             }
         }
         if (base == null) {
-            plugin.getLogger().info("[Harvesting]   no Nexo base entity found at "
-                    + entity.getLocation().getBlockX() + ","
-                    + entity.getLocation().getBlockY() + ","
-                    + entity.getLocation().getBlockZ()
-                    + " (barrier block absent, entity scan also empty)");
             return;
         }
         if (NexoFurniture.furnitureMechanic(base) == null) {
-            plugin.getLogger().info("[Harvesting]   entity exists but has no furniture mechanic.");
             return;
         }
 
-        plugin.getLogger().info("[Harvesting]   found furniture base entity via " + evtName + ", harvesting!");
         cancellable.setCancelled(true);
         triggerHarvest(player, tool, mechanic, base);
     }
@@ -242,9 +185,6 @@ public class HarvestingToolListener implements Listener {
         long now = System.currentTimeMillis();
         Long last = lastUse.get(player.getUniqueId());
         if (last != null && now - last < mechanic.cooldownMs()) {
-            plugin.getLogger().info("[Harvesting] " + player.getName()
-                    + " on cooldown (" + (mechanic.cooldownMs() - (now - last))
-                    + "ms left).");
             return;
         }
         lastUse.put(player.getUniqueId(), now);
@@ -255,16 +195,10 @@ public class HarvestingToolListener implements Listener {
         // height = hauteur TOTALE (ex: 3 -> 1 au-dessus + niveau + 1 en-dessous).
         int halfHeight = Math.max(0, height / 2);
 
-        plugin.getLogger().info("[Harvesting] " + player.getName()
-                + " trigger around (" + center.getBlockX() + ","
-                + center.getBlockY() + "," + center.getBlockZ()
-                + ") r=" + radius + " h=" + height + " (halfH=" + halfHeight + ")");
-
         if (center.getWorld() == null) return;
 
         FarmerMechanicFactory farmerFactory = FarmerMechanicFactory.instance();
         if (farmerFactory == null) {
-            plugin.getLogger().warning("[Harvesting] FarmerMechanicFactory not registered!");
             return;
         }
 
@@ -275,7 +209,6 @@ public class HarvestingToolListener implements Listener {
         int minZ = center.getBlockZ() - radius;
         int maxZ = center.getBlockZ() + radius;
 
-        int scanned = 0;
         int harvested = 0;
         java.util.Map<String, Integer> rejectReasons = new java.util.HashMap<>();
 
@@ -287,11 +220,9 @@ public class HarvestingToolListener implements Listener {
 
             var furnMech = NexoFurniture.furnitureMechanic(display);
             if (furnMech == null) continue;
-            scanned++;
 
             String furnitureId = furnMech.getItemID();
             if (furnitureId == null) {
-                rejectReasons.merge("[null itemID]", 1, Integer::sum);
                 continue;
             }
 
@@ -323,8 +254,6 @@ public class HarvestingToolListener implements Listener {
             }
         }
 
-        plugin.getLogger().info("[Harvesting]   scanned " + scanned
-                + " furniture(s), harvested " + harvested);
         if (harvested == 0 && !rejectReasons.isEmpty()) {
             plugin.getLogger().info("[Harvesting]   reject breakdown: " + rejectReasons);
         }
@@ -429,5 +358,4 @@ public class HarvestingToolListener implements Listener {
         if (newDamage >= maxDurability) tool.setAmount(0);
     }
 }
-
 

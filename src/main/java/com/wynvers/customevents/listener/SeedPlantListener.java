@@ -105,8 +105,12 @@ public class SeedPlantListener implements Listener {
         event.setCancelled(true);
 
         Player player = event.getPlayer();
-        Location placeLoc = airBlock.getLocation();
-        float yaw = player.getLocation().getYaw();
+        // Center the furniture on the block (X+0.5, Z+0.5) so it sits in
+        // the middle of the farmland, like vanilla wheat does, and force
+        // a fixed yaw=0 so every crop is axis-aligned (no random tilt
+        // depending on the way the player was facing).
+        Location placeLoc = airBlock.getLocation().add(0.5, 0, 0.5);
+        float yaw = 0f;
         ItemStack seedItem = item;
 
         if (debug()) plugin.getLogger().info("[SeedPlant] " + player.getName()

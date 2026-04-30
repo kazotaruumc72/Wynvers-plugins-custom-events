@@ -90,13 +90,14 @@ public class FarmerEventListener implements Listener {
     }
 
     /**
-     * Public API used by {@code SeedPlaceListener} after a manual placement
-     * (i.e. when {@link com.nexomc.nexo.api.events.furniture.NexoFurniturePlaceEvent}
-     * was bypassed).
+     * Public entry-point used by the manual seed-planting listener (when we
+     * place the furniture ourselves via {@code NexoFurniture.place(...)} and
+     * therefore have to schedule the growth tick on our own).
      */
     public void onManualPlacement(String currentItemId, Location loc, FarmerMechanic data) {
         scheduleGrowth(currentItemId, loc, data);
     }
+
 
     private void tick(String currentItemId, Location loc, FarmerMechanic data) {
         ItemDisplay current = NexoFurniture.baseEntity(loc);

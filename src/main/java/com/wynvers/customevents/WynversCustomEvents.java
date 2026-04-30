@@ -3,9 +3,8 @@ package com.wynvers.customevents;
 import com.wynvers.customevents.listener.OrestackEventListener;
 import com.wynvers.customevents.listener.WitherEventListener;
 import com.wynvers.customevents.listener.FarmerEventListener;
+import com.wynvers.customevents.listener.SeedPlantListener;
 import com.wynvers.customevents.listener.HarvesterEventListener;
-import com.wynvers.customevents.listener.SeedCooldownListener;
-import com.wynvers.customevents.listener.SeedPlaceListener;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
@@ -112,22 +111,17 @@ public class WynversCustomEvents extends JavaPlugin {
             Bukkit.getPluginManager().registerEvents(farmerListener, this);
             getLogger().info("Nexo farmer mechanic enabled.");
 
+            // Auto-plant: when a player right-clicks farmland with a farmer
+            // seed item, place the furniture immediately and force the
+            // correct visual properties (model + transform).
+            Bukkit.getPluginManager().registerEvents(
+                    new SeedPlantListener(this, farmerListener), this);
+            getLogger().info("Farmer seed auto-plant enabled.");
+
             // Harvester mechanic: right-click on furniture to harvest items and damage tool
             harvesterListener = new HarvesterEventListener(this);
             Bukkit.getPluginManager().registerEvents(harvesterListener, this);
             getLogger().info("Harvester mechanic enabled.");
-
-            // Seed cooldown: forces use_cooldown=0 on farmer seed items so
-            // they place their furniture instantly on right-click.
-            Bukkit.getPluginManager().registerEvents(new SeedCooldownListener(this), this);
-            getLogger().info("Seed use_cooldown=0 enforcement enabled.");
-
-            // Manual seed placement on farmland (Nexo's auto-placement does
-            // not always trigger on farmland, so we place the furniture
-            // ourselves and schedule growth).
-            Bukkit.getPluginManager().registerEvents(
-                    new SeedPlaceListener(this, farmerListener), this);
-            getLogger().info("Seed manual placement on farmland enabled.");
         } else {
             getLogger().warning("Nexo not found - 'giveItem NexoItems:' actions will be skipped.");
         }

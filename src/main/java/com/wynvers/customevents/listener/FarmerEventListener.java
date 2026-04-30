@@ -18,6 +18,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -101,6 +102,10 @@ public class FarmerEventListener implements Listener {
 
     private void tick(String currentItemId, Location loc, FarmerMechanic data) {
         ItemDisplay current = NexoFurniture.baseEntity(loc);
+        if (current == null) {
+            // L'entité n'a pas de barrier block : on scanne les ItemDisplay proches
+            current = findFurnitureEntityNearby(loc, currentItemId);
+        }
         if (current == null) {
             if (debug()) plugin.getLogger().info(
                     "[Farmer] " + currentItemId + " at " + locStr(loc)
@@ -220,6 +225,35 @@ public class FarmerEventListener implements Listener {
 
     private boolean debug() {
         return plugin.getConfig().getBoolean("farmer-debug", false);
+    }
+
+    /**
+     * Fallback pour les meubles sans barrier block :
+     * scanne les ItemDisplay proches et retourne celui qui correspond à {@code itemId}.
+     */
+    private ItemDisplay findFurnitureEntityNearby(Location loc, String itemId) {
+        if (loc.getWorld() == null) return null;
+        Collection<ItemDisplay> candidates = loc.getWorld().getEntitiesByClass(ItemDisplay.class);
+        ItemDisplay best = null;
+        double bestDist = 2.25; // rayon de 1.5 bloc
+        for (ItemDisplay d : candidates) {
+            double dist = d.getLocation().distanceSquared(loc);
+            if (dist > bestDist) continue;
+            try {
+                var mech = NexoFurniture.furnitureMechanic(d);
+                if (mech == null) continue;
+                if (!itemId.equalsIgnoreCase(mech.getItemID())) continue;
+            } catch (Throwable ignored) {
+                continue;
+            }
+            best = d;
+            bestDist = dist;
+        }
+        if (best != null && debug()) {
+            plugin.getLogger().info("[Farmer] baseEntity fallback found '" + itemId
+                    + "' via entity scan (dist=" + Math.sqrt(bestDist) + ")");
+        }
+        return best;
     }
 
     private String resolveItemId(NexoFurniturePlaceEvent event) {

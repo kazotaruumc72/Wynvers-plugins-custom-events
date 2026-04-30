@@ -25,6 +25,7 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -97,11 +98,37 @@ public class HarvestingToolListener implements Listener {
         Block clicked = event.getClickedBlock();
         if (clicked == null) return;
 
+        // 1) Furniture exactement sur le bloc cliqué (cas barrier block)
         ItemDisplay clickedFurniture = NexoFurniture.baseEntity(clicked.getLocation());
+
+        // 2) Sinon, le bloc juste au-dessus (cas culture sur farmland sans barrier)
+        if (clickedFurniture == null) {
+            Block above = clicked.getRelative(0, 1, 0);
+            clickedFurniture = NexoFurniture.baseEntity(above.getLocation());
+            if (clickedFurniture == null) {
+                clickedFurniture = findFurnitureEntityNearby(above.getLocation());
+            }
+        }
+
+        // 3) Sinon, scan radar centré sur le bloc AU-DESSUS du clic
+        //    (les furnitures-cultures sont dans le bloc d'air au-dessus de la farmland)
+        if (clickedFurniture == null) {
+            Block above = clicked.getRelative(0, 1, 0);
+            Location scanCenter = above.getLocation().add(0.5, 0.5, 0.5);
+            clickedFurniture = findFurnitureInRadius(
+                    scanCenter, mechanic.radius(), mechanic.height());
+            if (clickedFurniture != null) {
+                plugin.getLogger().info("[Harvesting]   no furniture at click, "
+                        + "radar scan picked one within r=" + mechanic.radius()
+                        + " h=" + mechanic.height() + " (centered above clicked block)");
+            }
+        }
+
         if (clickedFurniture == null) {
             plugin.getLogger().info("[Harvesting]   block " + clicked.getType()
                     + " at " + clicked.getX() + "," + clicked.getY() + "," + clicked.getZ()
-                    + " is NOT a Nexo furniture base. (Maybe entity-only furniture?)");
+                    + " is NOT a Nexo furniture base, and no furniture found above "
+                    + "or within radar (r=" + mechanic.radius() + " h=" + mechanic.height() + ").");
             return;
         }
 
@@ -165,12 +192,17 @@ public class HarvestingToolListener implements Listener {
             base = display;
         } else {
             base = NexoFurniture.baseEntity(entity.getLocation());
+            if (base == null) {
+                // L'entité n'a pas de barrier block : fallback par scan d'ItemDisplay proches
+                base = findFurnitureEntityNearby(entity.getLocation());
+            }
         }
         if (base == null) {
             plugin.getLogger().info("[Harvesting]   no Nexo base entity found at "
                     + entity.getLocation().getBlockX() + ","
                     + entity.getLocation().getBlockY() + ","
-                    + entity.getLocation().getBlockZ());
+                    + entity.getLocation().getBlockZ()
+                    + " (barrier block absent, entity scan also empty)");
             return;
         }
         if (NexoFurniture.furnitureMechanic(base) == null) {
@@ -203,11 +235,13 @@ public class HarvestingToolListener implements Listener {
         Location center = clickedFurniture.getLocation();
         int radius = mechanic.radius();
         int height = mechanic.height();
+        // height = hauteur TOTALE (ex: 3 -> 1 au-dessus + niveau + 1 en-dessous).
+        int halfHeight = Math.max(0, height / 2);
 
         plugin.getLogger().info("[Harvesting] " + player.getName()
                 + " trigger around (" + center.getBlockX() + ","
                 + center.getBlockY() + "," + center.getBlockZ()
-                + ") r=" + radius + " h=" + height);
+                + ") r=" + radius + " h=" + height + " (halfH=" + halfHeight + ")");
 
         if (center.getWorld() == null) return;
 
@@ -219,8 +253,8 @@ public class HarvestingToolListener implements Listener {
 
         int minX = center.getBlockX() - radius;
         int maxX = center.getBlockX() + radius;
-        int minY = center.getBlockY() - height;
-        int maxY = center.getBlockY() + height;
+        int minY = center.getBlockY() - halfHeight;
+        int maxY = center.getBlockY() + halfHeight;
         int minZ = center.getBlockZ() - radius;
         int maxZ = center.getBlockZ() + radius;
 
@@ -286,6 +320,66 @@ public class HarvestingToolListener implements Listener {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /**
+     * Fallback pour les meubles sans barrier block :
+     * scanne les ItemDisplay proches et retourne le premier qui a un mechanic furniture Nexo.
+     */
+    private static ItemDisplay findFurnitureEntityNearby(Location loc) {
+        if (loc.getWorld() == null) return null;
+        Collection<ItemDisplay> candidates = loc.getWorld().getEntitiesByClass(ItemDisplay.class);
+        ItemDisplay best = null;
+        double bestDist = 2.25; // rayon de 1.5 bloc
+        for (ItemDisplay d : candidates) {
+            double dist = d.getLocation().distanceSquared(loc);
+            if (dist > bestDist) continue;
+            try {
+                if (NexoFurniture.furnitureMechanic(d) == null) continue;
+            } catch (Throwable ignored) {
+                continue;
+            }
+            best = d;
+            bestDist = dist;
+        }
+        return best;
+    }
+
+    /**
+     * Mode "radar" : scanne dans une boîte (radius x height x radius) autour de
+     * {@code center} et retourne le furniture Nexo le plus proche, ou null.
+     * {@code height} = hauteur TOTALE (ex: 3 -> 1 au-dessus + niveau + 1 en-dessous).
+     * Utilisé quand le joueur clique à côté d'une culture sans la viser pile.
+     */
+    private static ItemDisplay findFurnitureInRadius(Location center, int radius, int height) {
+        if (center.getWorld() == null) return null;
+        int halfHeight = Math.max(0, height / 2);
+        int minX = center.getBlockX() - radius;
+        int maxX = center.getBlockX() + radius;
+        int minY = center.getBlockY() - halfHeight;
+        int maxY = center.getBlockY() + halfHeight;
+        int minZ = center.getBlockZ() - radius;
+        int maxZ = center.getBlockZ() + radius;
+
+        ItemDisplay best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (ItemDisplay d : center.getWorld().getEntitiesByClass(ItemDisplay.class)) {
+            Location l = d.getLocation();
+            if (l.getBlockX() < minX || l.getBlockX() > maxX) continue;
+            if (l.getBlockY() < minY || l.getBlockY() > maxY) continue;
+            if (l.getBlockZ() < minZ || l.getBlockZ() > maxZ) continue;
+            try {
+                if (NexoFurniture.furnitureMechanic(d) == null) continue;
+            } catch (Throwable ignored) {
+                continue;
+            }
+            double dist = l.distanceSquared(center);
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = d;
+            }
+        }
+        return best;
     }
 
     private void damageTool(ItemStack tool, int amount) {

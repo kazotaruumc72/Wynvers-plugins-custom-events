@@ -1,7 +1,11 @@
 package com.wynvers.customevents.listener;
 
 import com.nexomc.nexo.api.NexoFurniture;
+import com.nexomc.nexo.mechanics.furniture.FurnitureMechanic;
 import com.wynvers.customevents.WynversCustomEvents;
+import com.wynvers.customevents.nexo.harvester.HarvesterCache;
+import com.wynvers.customevents.nexo.harvester.HarvesterMechanic;
+import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
 import org.bukkit.Location;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
@@ -16,19 +20,37 @@ import org.bukkit.inventory.meta.Damageable;
  * Harvester mechanic: when a player right-clicks a Nexo furniture with a tool,
  * scans the surrounding area for other furnitures and damages the tool accordingly.
  *
- * <p>Configuration can be added to Nexo item files via a custom mechanic or
- * directly in config files.
+ * <p>Configuration is read from the Nexo item's {@code harvester} mechanic section.
  */
 public class HarvesterEventListener implements Listener {
 
     private final WynversCustomEvents plugin;
 
-    // Default scan parameters
-    private static final int DEFAULT_SCAN_RADIUS = 3;
-    private static final int DEFAULT_SCAN_HEIGHT = 2;
-
     public HarvesterEventListener(WynversCustomEvents plugin) {
         this.plugin = plugin;
+    }
+
+    private static HarvesterMechanic mechanicFor(ItemDisplay baseEntity) {
+        try {
+            FurnitureMechanic furniture = NexoFurniture.furnitureMechanic(baseEntity);
+            if (furniture == null) {
+                return null;
+            }
+            String itemId = furniture.getItemID();
+
+            // Quick check: is this item in the final-stage harvesters cache?
+            if (!HarvesterCache.isFinalStageHarvester(itemId)) {
+                return null;
+            }
+
+            HarvesterMechanicFactory factory = HarvesterMechanicFactory.instance();
+            if (factory == null) {
+                return null;
+            }
+            return factory.getMechanic(itemId);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -51,6 +73,13 @@ public class HarvesterEventListener implements Listener {
             return;
         }
 
+        // Get harvester config from the item's mechanic
+        // (mechanicFor() already checks if it's a final-stage harvester via cache)
+        HarvesterMechanic harvesterConfig = mechanicFor(baseEntity);
+        if (harvesterConfig == null) {
+            return;
+        }
+
         ItemStack itemInHand = player.getInventory().getItemInMainHand();
         if (itemInHand.getType().isAir()) {
             itemInHand = player.getInventory().getItemInOffHand();
@@ -59,14 +88,13 @@ public class HarvesterEventListener implements Listener {
             return;
         }
 
-        // Get scan parameters from config (or defaults)
-        int scanRadius = plugin.getConfig().getInt("harvester-scan-radius", DEFAULT_SCAN_RADIUS);
-        int scanHeight = plugin.getConfig().getInt("harvester-scan-height", DEFAULT_SCAN_HEIGHT);
+        int scanRadius = harvesterConfig.scanRadius();
+        int scanHeight = harvesterConfig.scanHeight();
 
         // Debug log
         if (debug()) {
             plugin.getLogger().info("[Harvester] " + player.getName() + " trigger ("
-                    + itemInHand.getType().name() + ":" + itemInHand.getItemMeta() + ") action=" + event.getAction().name()
+                    + itemInHand.getType().name() + ") action=" + event.getAction().name()
                     + " around (" + clickedLoc.getBlockX() + "," + clickedLoc.getBlockY()
                     + "," + clickedLoc.getBlockZ() + ") r=" + scanRadius + " h=" + scanHeight);
         }
@@ -80,7 +108,7 @@ public class HarvesterEventListener implements Listener {
         }
 
         // Damage the tool for each furniture found
-        int damagePerFurniture = plugin.getConfig().getInt("harvester-damage-per-item", 1);
+        int damagePerFurniture = harvesterConfig.damagePerItem();
         int totalDamage = scanResult.matches * damagePerFurniture;
 
         if (totalDamage > 0) {

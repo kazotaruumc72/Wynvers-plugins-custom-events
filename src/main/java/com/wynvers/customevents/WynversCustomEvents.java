@@ -7,6 +7,7 @@ import com.wynvers.customevents.listener.HarvesterEventListener;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
+import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -83,6 +84,12 @@ public class WynversCustomEvents extends JavaPlugin {
                                     .registerMechanicFactory(new FarmerMechanicFactory(), true);
                             getLogger().info("Registered Nexo mechanic '"
                                     + FarmerMechanicFactory.MECHANIC_ID + "'.");
+                        }
+                        if (HarvesterMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new HarvesterMechanicFactory(), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + HarvesterMechanicFactory.MECHANIC_ID + "'.");
                         }
                     } catch (Throwable t) {
                         getLogger().warning(

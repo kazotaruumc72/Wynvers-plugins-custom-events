@@ -79,7 +79,13 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
 
     // ─── Placement ──────────────────────────────────────────────────────────
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    /**
+     * Runs at HIGHEST and does <strong>not</strong> ignore cancellation: this
+     * lets us override SaberFactions' default block-placement protection that
+     * cancels the event at NORMAL/HIGH priority — placing a drill in an enemy
+     * claim is the whole point of the mechanic.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onFurniturePlace(NexoFurniturePlaceEvent event) {
         FurnitureMechanic furn = event.getMechanic();
         if (furn == null) return;
@@ -104,6 +110,11 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
             event.setCancelled(true);
             player.sendMessage("§c[Foreuse] Doit être placée dans un claim ennemi.");
             return;
+        }
+
+        // Override SaberFactions protection: enemy claim is where this belongs.
+        if (event.isCancelled()) {
+            event.setCancelled(false);
         }
 
         ItemDisplay base = event.getBaseEntity();

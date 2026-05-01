@@ -4,15 +4,20 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.logging.Logger;
 
 /**
  * Reflection-based bridge to SaberFactions / FactionsUUID.
  *
- * <p>Avoids a hard compile-time dependency: if the Factions plugin is missing,
- * {@link #isInEnemyClaim(Player, Location)} returns {@code false} and a warning
- * is logged once.
+ * <p>Avoids a hard compile-time dependency: if the Factions plugin is missing
+ * or its API doesn't match expectations, {@link #isInEnemyClaim(Player, Location)}
+ * returns {@code false} and a warning is logged once.
+ *
+ * <p>Tries several ways to build an {@code FLocation} from a Bukkit
+ * {@link Location} (constructor first, then static factory methods) so the hook
+ * stays compatible with both SaberFactions and the various FactionsUUID forks.
  */
 public final class SaberFactionsHook {
 
@@ -21,9 +26,9 @@ public final class SaberFactionsHook {
     private static boolean initialized = false;
     private static boolean available = false;
 
+    // Reflection handles
     private static Method boardGetInstance;
     private static Method boardGetFactionAt;
-    private static Method fLocationConstructorViaLocation;
     private static Method fPlayersGetInstance;
     private static Method fPlayersGetByPlayer;
     private static Method fPlayerGetFaction;
@@ -31,7 +36,14 @@ public final class SaberFactionsHook {
     private static Method factionGetRelationTo;
     private static Object enemyRelation;
 
+    // FLocation builder strategy chosen at init time.
+    private static FLocationBuilder fLocationBuilder;
+
     private SaberFactionsHook() {}
+
+    private interface FLocationBuilder {
+        Object build(Location loc) throws ReflectiveOperationException;
+    }
 
     private static synchronized void init() {
         if (initialized) return;
@@ -53,33 +65,65 @@ public final class SaberFactionsHook {
 
             boardGetInstance = boardCls.getMethod("getInstance");
             boardGetFactionAt = boardCls.getMethod("getFactionAt", fLocCls);
-            fLocationConstructorViaLocation = fLocCls.getMethod("valueOf", Location.class);
             fPlayersGetInstance = fPlayersCls.getMethod("getInstance");
             fPlayersGetByPlayer = fPlayersCls.getMethod("getByPlayer", Player.class);
             fPlayerGetFaction = fPlayerCls.getMethod("getFaction");
             factionIsWilderness = factionCls.getMethod("isWilderness");
             factionGetRelationTo = factionCls.getMethod("getRelationTo", factionCls);
-            enemyRelation = Enum.valueOf((Class<Enum>) relationCls, "ENEMY");
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Object enemy = Enum.valueOf((Class<Enum>) relationCls, "ENEMY");
+            enemyRelation = enemy;
+
+            fLocationBuilder = resolveFLocationBuilder(fLocCls);
+            if (fLocationBuilder == null) {
+                LOG.warning("FLocation has no usable constructor or factory — claim checks disabled.");
+                return;
+            }
 
             available = true;
             LOG.info("SaberFactions / FactionsUUID API hooked successfully.");
-        } catch (NoSuchMethodException nsme) {
-            // FLocation might use a constructor instead of a static valueOf.
-            try {
-                Class<?> fLocCls = Class.forName("com.massivecraft.factions.FLocation");
-                fLocationConstructorViaLocation = null;
-                Method byChunk = fLocCls.getMethod("valueOf", Object.class);
-                fLocationConstructorViaLocation = byChunk;
-                available = boardGetInstance != null;
-                if (available) LOG.info("SaberFactions API hooked (fallback FLocation lookup).");
-            } catch (Throwable t) {
-                LOG.warning("Factions API mismatch: " + t.getMessage()
-                        + " — claim checks disabled.");
-            }
         } catch (Throwable t) {
-            LOG.warning("Failed to hook Factions API: " + t.getMessage()
-                    + " — claim checks disabled.");
+            LOG.warning("Failed to hook Factions API: " + t.getClass().getSimpleName()
+                    + " " + t.getMessage() + " — claim checks disabled.");
         }
+    }
+
+    private static FLocationBuilder resolveFLocationBuilder(Class<?> fLocCls) {
+        // 1. Constructor(Location)
+        try {
+            Constructor<?> ctor = fLocCls.getConstructor(Location.class);
+            return loc -> ctor.newInstance(loc);
+        } catch (NoSuchMethodException ignored) {}
+
+        // 2. Constructor(Player) — fall back to launcher.getLocation() at the
+        //    Player level (less precise but acceptable).
+        try {
+            Constructor<?> ctor = fLocCls.getConstructor(Player.class);
+            // Cannot satisfy this from a raw Location alone — skip.
+        } catch (NoSuchMethodException ignored) {}
+
+        // 3. Constructor(String world, int x, int z) — chunk-based.
+        try {
+            Constructor<?> ctor = fLocCls.getConstructor(String.class, int.class, int.class);
+            return loc -> ctor.newInstance(
+                    loc.getWorld() != null ? loc.getWorld().getName() : "world",
+                    loc.getBlockX() >> 4,
+                    loc.getBlockZ() >> 4);
+        } catch (NoSuchMethodException ignored) {}
+
+        // 4. static FLocation.valueOf(Location)
+        try {
+            Method m = fLocCls.getMethod("valueOf", Location.class);
+            return loc -> m.invoke(null, loc);
+        } catch (NoSuchMethodException ignored) {}
+
+        // 5. static FLocation.fromLocation(Location)
+        try {
+            Method m = fLocCls.getMethod("fromLocation", Location.class);
+            return loc -> m.invoke(null, loc);
+        } catch (NoSuchMethodException ignored) {}
+
+        return null;
     }
 
     /**
@@ -93,7 +137,7 @@ public final class SaberFactionsHook {
         if (!available) return false;
         try {
             Object board = boardGetInstance.invoke(null);
-            Object floc = fLocationConstructorViaLocation.invoke(null, location);
+            Object floc = fLocationBuilder.build(location);
             Object factionAt = boardGetFactionAt.invoke(board, floc);
             if (factionAt == null) return false;
             if ((boolean) factionIsWilderness.invoke(factionAt)) return false;

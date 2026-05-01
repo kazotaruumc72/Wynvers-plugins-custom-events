@@ -1,4 +1,5 @@
 # ✅ CHECKLIST PRÉ-TEST
+
 Avant de tester le plugin, vérifiez cette checklist.
 
 ---

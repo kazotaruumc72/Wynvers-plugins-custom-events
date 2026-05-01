@@ -1,6 +1,6 @@
 package com.wynvers.customevents.listener;
 
-import com.nexomc.nexo.api.events.custom_block.NexoBlockPlaceEvent;
+import com.nexomc.nexo.api.events.custom_block.noteblock.NexoNoteBlockPlaceEvent;
 import com.wynvers.customevents.WynversCustomEvents;
 import com.wynvers.customevents.nexo.teleporter.TeleporterConfigGenerator;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
@@ -12,33 +12,43 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 import java.io.File;
+import java.util.logging.Logger;
 
 /**
- * Handles the teleporter setup flow: custom block placement triggers the wizard,
- * and chat input drives it step by step.
+ * Handles the teleporter setup flow: placing the configuration tool
+ * (item ID = {@link #TELEPORTER_BASE_ID}) starts the wizard, and chat input
+ * drives it step by step.
  */
 public class TeleporterInputListener implements Listener {
 
-    private static final String TELEPORTER_BASE_ID = "teleporter_base";
+    /**
+     * Nexo item ID of the "configuration tool" block. When a player places a
+     * Nexo custom block with this ID, the setup wizard starts.
+     */
+    private static final String TELEPORTER_BASE_ID = "teleporter";
 
     private final WynversCustomEvents plugin;
     private final TeleporterSetupManager setupManager;
     private final TeleporterConfigGenerator configGenerator;
+    private final Logger log;
 
     public TeleporterInputListener(WynversCustomEvents plugin, TeleporterSetupManager setupManager) {
         this.plugin = plugin;
         this.setupManager = setupManager;
+        this.log = plugin.getLogger();
         File nexoItemsDir = new File(plugin.getDataFolder().getParentFile(), "Nexo/items");
         this.configGenerator = new TeleporterConfigGenerator(nexoItemsDir);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onNexoBlockPlace(NexoBlockPlaceEvent event) {
-        if (!TELEPORTER_BASE_ID.equals(event.getMechanic().getItemID())) return;
+    public void onNexoNoteBlockPlace(NexoNoteBlockPlaceEvent event) {
+        String itemId = event.getMechanic() != null ? event.getMechanic().getItemID() : null;
+        if (!TELEPORTER_BASE_ID.equals(itemId)) return;
 
         Player player = event.getPlayer();
         if (player == null) return;
 
+        log.info("[Teleporter] Starting setup wizard for " + player.getName());
         setupManager.startSetup(player);
     }
 
@@ -55,6 +65,7 @@ public class TeleporterInputListener implements Listener {
 
             if (setupManager.isSetupCompleted(player)) {
                 String teleporterId = setupManager.getTeleporterName(player);
+                String itemname = setupManager.getItemname(player);
                 String world = setupManager.getDestinationWorld(player);
                 double x = setupManager.getDestinationX(player);
                 double y = setupManager.getDestinationY(player);
@@ -63,7 +74,7 @@ public class TeleporterInputListener implements Listener {
                 float pitch = setupManager.getDestinationPitch(player);
 
                 boolean success = configGenerator.generateTeleporterConfig(
-                        teleporterId, world, x, y, z, yaw, pitch);
+                        teleporterId, itemname, world, x, y, z, yaw, pitch);
 
                 if (success) {
                     player.sendMessage("§a[Teleporter] Configuration sauvegardée!");
@@ -76,5 +87,4 @@ public class TeleporterInputListener implements Listener {
             }
         });
     }
-
 }

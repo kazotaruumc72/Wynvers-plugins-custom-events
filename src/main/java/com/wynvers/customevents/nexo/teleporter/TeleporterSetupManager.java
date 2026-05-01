@@ -15,6 +15,7 @@ public class TeleporterSetupManager {
     public enum SetupStage {
         IDLE,
         AWAITING_NAME,
+        AWAITING_ITEMNAME,
         AWAITING_WORLD,
         AWAITING_X,
         AWAITING_Y,
@@ -27,6 +28,7 @@ public class TeleporterSetupManager {
     private static class PlayerSetupState {
         SetupStage stage = SetupStage.IDLE;
         String teleporterName;
+        String itemname;
         String world;
         double x;
         double y;
@@ -70,6 +72,16 @@ public class TeleporterSetupManager {
                         return;
                     }
                     state.teleporterName = input.trim();
+                    state.stage = SetupStage.AWAITING_ITEMNAME;
+                    player.sendMessage("§6[Teleporter] §fEntrez le nom d'affichage (itemname) visible dans Nexo:");
+                    break;
+
+                case AWAITING_ITEMNAME:
+                    if (input.trim().isEmpty()) {
+                        player.sendMessage("§c[Teleporter] Le nom d'affichage ne peut pas être vide!");
+                        return;
+                    }
+                    state.itemname = input.trim();
                     state.stage = SetupStage.AWAITING_WORLD;
                     player.sendMessage("§6[Teleporter] §fEntrez le nom du monde de destination:");
                     break;
@@ -140,6 +152,12 @@ public class TeleporterSetupManager {
         UUID uuid = player.getUniqueId();
         PlayerSetupState state = playerStates.get(uuid);
         return state != null ? state.teleporterName : null;
+    }
+
+    public String getItemname(Player player) {
+        UUID uuid = player.getUniqueId();
+        PlayerSetupState state = playerStates.get(uuid);
+        return state != null ? state.itemname : null;
     }
 
     public String getDestinationWorld(Player player) {

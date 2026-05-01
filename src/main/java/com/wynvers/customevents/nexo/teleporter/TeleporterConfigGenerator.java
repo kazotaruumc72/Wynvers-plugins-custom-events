@@ -21,19 +21,17 @@ public class TeleporterConfigGenerator {
     /**
      * Generates and writes a teleporter item configuration to the Nexo items directory.
      */
-    public boolean generateTeleporterConfig(String teleporterId, String destinationWorld,
+    public boolean generateTeleporterConfig(String teleporterId, String itemname, String destinationWorld,
                                            double x, double y, double z, float yaw, float pitch) {
         try {
             File itemsFile = new File(nexoItemsDir, "teleporter_items.yml");
-            String config = generateTeleporterYaml(teleporterId, destinationWorld, x, y, z, yaw, pitch);
+            String config = generateTeleporterYaml(teleporterId, itemname, destinationWorld, x, y, z, yaw, pitch);
 
-            // Create the file if it doesn't exist
             if (!itemsFile.exists()) {
                 itemsFile.createNewFile();
                 Files.write(itemsFile.toPath(), generateFileHeader().getBytes());
             }
 
-            // Append the new teleporter configuration
             Files.write(itemsFile.toPath(), ("\n" + config).getBytes(), StandardOpenOption.APPEND);
             return true;
         } catch (IOException e) {
@@ -46,12 +44,12 @@ public class TeleporterConfigGenerator {
                "# These items are dynamically created by the Teleporter mechanic\n";
     }
 
-    private String generateTeleporterYaml(String teleporterId, String destinationWorld,
+    private String generateTeleporterYaml(String teleporterId, String itemname, String destinationWorld,
                                          double x, double y, double z, float yaw, float pitch) {
         List<String> lines = new ArrayList<>();
 
         lines.add(teleporterId + ":");
-        lines.add("  itemname: Teleporter");
+        lines.add("  itemname: \"" + itemname.replace("\"", "\\\"") + "\"");
         lines.add("  material: PAPER");
         lines.add("  Mechanics:");
         lines.add("    custom_block:");

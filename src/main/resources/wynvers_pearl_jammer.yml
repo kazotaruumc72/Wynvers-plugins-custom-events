@@ -1,0 +1,31 @@
+# Wynvers Custom Events - Ender Pearl Jammer
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Run: /nexo reload
+#
+# USAGE:
+# - Give to a player: /give @p paper{NexoID:"pearl_jammer"}
+# - Place inside your faction's claim.
+# - Any ender pearl thrown by an ENEMY of the claim's faction is destroyed
+#   the moment it enters the 15x15x15 cube around the jammer.
+# - Pearls thrown from inside the cube by an enemy are cancelled at launch.
+# - Without a Factions plugin, no pearls are blocked (no enemy detection).
+
+pearl_jammer:
+  itemname: "<dark_purple>Brouilleur d'Ender Pearl</dark_purple>"
+  material: PAPER
+  Mechanics:
+    furniture:
+      type: ITEM_DISPLAY
+      hitbox:
+        height: 1.0
+        width: 1.0
+    ender_jammer:
+      radius: 7              # 15x15x15 cube
+      block_inside: true     # cancel at launch if launcher is already inside
+      track_tick_interval: 2 # how often (ticks) to sample pearl position mid-flight
+      max_track_ticks: 200   # safety cap (~10s)
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_bettersnow/snow

@@ -11,6 +11,7 @@ import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
 import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
+import com.wynvers.customevents.nexo.enderjammer.EnderJammerMechanicFactory;
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
@@ -116,6 +117,12 @@ public class WynversCustomEvents extends JavaPlugin {
                                     .registerMechanicFactory(new HydroDrillMechanicFactory(WynversCustomEvents.this), true);
                             getLogger().info("Registered Nexo mechanic '"
                                     + HydroDrillMechanicFactory.MECHANIC_ID + "'.");
+                        }
+                        if (EnderJammerMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new EnderJammerMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + EnderJammerMechanicFactory.MECHANIC_ID + "'.");
                         }
                     } catch (Throwable t) {
                         getLogger().warning(

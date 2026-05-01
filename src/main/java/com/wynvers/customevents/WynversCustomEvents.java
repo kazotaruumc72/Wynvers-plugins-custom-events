@@ -12,6 +12,7 @@ import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
 import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
+import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
 import org.bukkit.Bukkit;
@@ -110,6 +111,12 @@ public class WynversCustomEvents extends JavaPlugin {
                             getLogger().info("Registered Nexo mechanic '"
                                     + TeleporterMechanicFactory.MECHANIC_ID + "'.");
                         }
+                        if (HydroDrillMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new HydroDrillMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + HydroDrillMechanicFactory.MECHANIC_ID + "'.");
+                        }
                     } catch (Throwable t) {
                         getLogger().warning(
                                 "Failed to register custom Nexo mechanic: " + t.getMessage());
@@ -160,6 +167,9 @@ public class WynversCustomEvents extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (HydroDrillMechanicFactory.instance() != null) {
+            HydroDrillMechanicFactory.instance().manager().shutdown();
+        }
         getLogger().info("WynversCustomEvents disabled.");
     }
 

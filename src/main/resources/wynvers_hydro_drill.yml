@@ -1,0 +1,32 @@
+# Wynvers Custom Events - Hydro-Siege Drill
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Run: /nexo reload
+#
+# USAGE:
+# - Give to a player: /give @p paper{NexoID:"hydro_siege_drill"}
+# - Place against an enemy claim wall.
+# - Wait 60s (incassable). At T=0, water in 7x7x7 disappears,
+#   obsidian becomes cobblestone for 30s (TNT can break it).
+# - 60s cooldown per player.
+
+hydro_siege_drill:
+  itemname: "<gold>Foreuse d'Assèchement</gold>"
+  material: PAPER
+  Mechanics:
+    furniture:
+      type: ITEM_FRAME
+      hitbox:
+        height: 1.0
+        width: 1.0
+    hydro_drill:
+      radius: 3                  # 7x7x7 cube (radius 3 from center block)
+      countdown_seconds: 60
+      obsidian_swap_seconds: 30  # window where obsidian → cobblestone
+      cooldown_seconds: 60
+      particle: SQUID_INK
+      sound: BLOCK_BEACON_AMBIENT
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_bettersnow/snow

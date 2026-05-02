@@ -1,0 +1,45 @@
+# Wynvers Custom Events - Breach Charge & Defuser
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Run: /nexo reload
+#
+# USAGE:
+# - Charge: /give @p paper{NexoID:"breach_charge"}
+#   Right-click on a wall side (NORTH/SOUTH/EAST/WEST) to plant.
+#   10s countdown, then digs a 3x3x4 tunnel into the wall.
+#   Defenders see a faction alert + can break the furniture or use a Defuser.
+#   Disabled in SafeZone / WarZone. 5min cooldown per player.
+#
+# - Defuser: /give @p paper{NexoID:"breach_defuser"}
+#   Right-click an active Breach Charge with this item to defuse it.
+#   Consumed on use by default.
+
+breach_charge:
+  itemname: "<red>Charge de Brèche</red>"
+  material: PAPER
+  Mechanics:
+    furniture:
+      type: ITEM_FRAME
+      hitbox:
+        height: 1.0
+        width: 1.0
+    breach_charge:
+      countdown_seconds: 10
+      critical_threshold_seconds: 3
+      cooldown_seconds: 300
+      tunnel_width: 3
+      tunnel_height: 3
+      tunnel_depth: 4
+      destroy_obsidian: false
+      alert_faction: true
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_bettersnow/snow
+
+breach_defuser:
+  itemname: "<aqua>Désamorceur de Charge</aqua>"
+  material: PAPER
+  Mechanics:
+    breach_defuser:
+      consume_on_use: true

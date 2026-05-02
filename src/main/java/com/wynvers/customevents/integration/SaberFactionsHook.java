@@ -6,6 +6,10 @@ import org.bukkit.entity.Player;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.logging.Logger;
 
 /**
@@ -33,6 +37,11 @@ public final class SaberFactionsHook {
     private static Method fPlayersGetByPlayer;
     private static Method fPlayerGetFaction;
     private static Method factionIsWilderness;
+    private static Method factionIsSafeZone;
+    private static Method factionIsWarZone;
+    private static Method factionGetFPlayers;
+    private static Method fPlayerIsOnline;
+    private static Method fPlayerGetPlayer;
     private static Method factionGetRelationTo;
     private static Object enemyRelation;
 
@@ -70,6 +79,13 @@ public final class SaberFactionsHook {
             fPlayerGetFaction = fPlayerCls.getMethod("getFaction");
             factionIsWilderness = factionCls.getMethod("isWilderness");
             factionGetRelationTo = factionCls.getMethod("getRelationTo", factionCls);
+
+            // Optional methods (best-effort).
+            factionIsSafeZone = tryMethod(factionCls, "isSafeZone");
+            factionIsWarZone = tryMethod(factionCls, "isWarZone");
+            factionGetFPlayers = tryMethod(factionCls, "getFPlayers");
+            fPlayerIsOnline = tryMethod(fPlayerCls, "isOnline");
+            fPlayerGetPlayer = tryMethod(fPlayerCls, "getPlayer");
             @SuppressWarnings({"unchecked", "rawtypes"})
             Object enemy = Enum.valueOf((Class<Enum>) relationCls, "ENEMY");
             enemyRelation = enemy;
@@ -160,5 +176,70 @@ public final class SaberFactionsHook {
     public static boolean isAvailable() {
         init();
         return available;
+    }
+
+    /**
+     * Returns {@code true} if {@code location} is inside a SafeZone or
+     * WarZone claim. Returns {@code false} when Factions is missing or the
+     * relevant API methods are unavailable.
+     */
+    public static boolean isProtectedZone(Location location) {
+        init();
+        if (!available) return false;
+        try {
+            Object faction = factionAt(location);
+            if (faction == null) return false;
+            if (factionIsSafeZone != null && (boolean) factionIsSafeZone.invoke(faction)) return true;
+            if (factionIsWarZone != null && (boolean) factionIsWarZone.invoke(faction)) return true;
+            return false;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * Returns the online players belonging to the faction owning the given
+     * location. Empty list when the location is wilderness, safezone, warzone,
+     * or when the Factions API is unavailable.
+     */
+    public static List<Player> getOnlineFactionMembers(Location location) {
+        init();
+        if (!available) return Collections.emptyList();
+        if (factionGetFPlayers == null || fPlayerGetPlayer == null) return Collections.emptyList();
+        try {
+            Object faction = factionAt(location);
+            if (faction == null) return Collections.emptyList();
+            if ((boolean) factionIsWilderness.invoke(faction)) return Collections.emptyList();
+            if (factionIsSafeZone != null && (boolean) factionIsSafeZone.invoke(faction)) return Collections.emptyList();
+            if (factionIsWarZone != null && (boolean) factionIsWarZone.invoke(faction)) return Collections.emptyList();
+
+            Object members = factionGetFPlayers.invoke(faction);
+            if (!(members instanceof Collection<?> collection)) return Collections.emptyList();
+
+            List<Player> result = new ArrayList<>();
+            for (Object fp : collection) {
+                if (fp == null) continue;
+                if (fPlayerIsOnline != null && !(boolean) fPlayerIsOnline.invoke(fp)) continue;
+                Object p = fPlayerGetPlayer.invoke(fp);
+                if (p instanceof Player player && player.isOnline()) result.add(player);
+            }
+            return result;
+        } catch (Throwable t) {
+            return Collections.emptyList();
+        }
+    }
+
+    private static Object factionAt(Location location) throws ReflectiveOperationException {
+        Object board = boardGetInstance.invoke(null);
+        Object floc = fLocationBuilder.build(location);
+        return boardGetFactionAt.invoke(board, floc);
+    }
+
+    private static Method tryMethod(Class<?> cls, String name, Class<?>... params) {
+        try {
+            return cls.getMethod(name, params);
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
     }
 }

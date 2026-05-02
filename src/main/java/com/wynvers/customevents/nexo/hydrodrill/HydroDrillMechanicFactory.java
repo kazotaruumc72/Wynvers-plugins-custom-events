@@ -1,23 +1,28 @@
 package com.wynvers.customevents.nexo.hydrodrill;
 
 import com.nexomc.nexo.api.NexoFurniture;
+import com.nexomc.nexo.api.NexoItems;
 import com.nexomc.nexo.api.events.furniture.NexoFurnitureBreakEvent;
-import com.nexomc.nexo.api.events.furniture.NexoFurniturePlaceEvent;
 import com.nexomc.nexo.mechanics.Mechanic;
 import com.nexomc.nexo.mechanics.MechanicFactory;
-import com.nexomc.nexo.mechanics.furniture.FurnitureMechanic;
 import com.wynvers.customevents.integration.SaberFactionsHook;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -77,23 +82,31 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
         return mechanic;
     }
 
-    // ─── Placement ──────────────────────────────────────────────────────────
+    // ─── Placement (manual flow) ───────────────────────────────────────────
+    //
+    // We listen at LOWEST so we run BEFORE SaberFactions' protection (which
+    // typically runs at NORMAL/HIGH). When we detect a drill placement attempt
+    // in an enemy claim, we cancel the event ourselves — preventing both
+    // SaberFactions and Nexo's normal placement flow from processing it — and
+    // then place the furniture programmatically via NexoFurniture.place(),
+    // bypassing the territorial protection entirely.
 
-    /**
-     * Runs at HIGHEST and does <strong>not</strong> ignore cancellation: this
-     * lets us override SaberFactions' default block-placement protection that
-     * cancels the event at NORMAL/HIGH priority — placing a drill in an enemy
-     * claim is the whole point of the mechanic.
-     */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onFurniturePlace(NexoFurniturePlaceEvent event) {
-        FurnitureMechanic furn = event.getMechanic();
-        if (furn == null) return;
-        HydroDrillMechanic drill = getMechanic(furn.getItemID());
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
+    public void onInteractPlace(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        Block clicked = event.getClickedBlock();
+        if (clicked == null) return;
+
+        ItemStack item = event.getItem();
+        if (item == null || item.getType().isAir()) return;
+
+        HydroDrillMechanic drill = getMechanic(item);
         if (drill == null) return;
 
         Player player = event.getPlayer();
-        if (player == null) return;
+        BlockFace face = event.getBlockFace();
+        Location targetLoc = clicked.getRelative(face).getLocation();
 
         if (manager.isOnCooldown(player.getUniqueId())) {
             event.setCancelled(true);
@@ -102,26 +115,35 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
             return;
         }
 
-        Block block = event.getBlock();
-        if (block == null) return;
-
         if (SaberFactionsHook.isAvailable()
-                && !SaberFactionsHook.isInEnemyClaim(player, block.getLocation())) {
+                && !SaberFactionsHook.isInEnemyClaim(player, targetLoc)) {
             event.setCancelled(true);
             player.sendMessage("§c[Foreuse] Doit être placée dans un claim ennemi.");
             return;
         }
 
-        // Override SaberFactions protection: enemy claim is where this belongs.
-        if (event.isCancelled()) {
-            event.setCancelled(false);
-        }
+        // Take control: cancel the event so SaberFactions and Nexo's regular
+        // placement flow don't process it, then place programmatically.
+        event.setCancelled(true);
+        event.setUseItemInHand(Event.Result.DENY);
 
-        ItemDisplay base = event.getBaseEntity();
-        if (base == null) return;
+        String itemId = NexoItems.idFromItem(item);
+        if (itemId == null) return;
 
-        manager.setCooldown(player.getUniqueId(), drill.cooldownSeconds());
-        startCountdown(drill, base, player, block.getLocation());
+        float yaw = player.getLocation().getYaw();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            ItemDisplay placed = NexoFurniture.place(itemId, targetLoc, yaw, face);
+            if (placed == null) {
+                player.sendMessage("§c[Foreuse] Échec de placement.");
+                return;
+            }
+            if (player.getGameMode() != GameMode.CREATIVE) {
+                ItemStack hand = player.getInventory().getItemInMainHand();
+                hand.setAmount(hand.getAmount() - 1);
+            }
+            manager.setCooldown(player.getUniqueId(), drill.cooldownSeconds());
+            startCountdown(drill, placed, player, targetLoc);
+        });
     }
 
     private void startCountdown(HydroDrillMechanic drill,

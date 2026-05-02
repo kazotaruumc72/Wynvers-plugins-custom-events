@@ -11,6 +11,8 @@ import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
 import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
+import com.wynvers.customevents.nexo.breachcharge.BreachChargeMechanicFactory;
+import com.wynvers.customevents.nexo.breachcharge.DefuserMechanicFactory;
 import com.wynvers.customevents.nexo.enderjammer.EnderJammerMechanicFactory;
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
@@ -123,6 +125,18 @@ public class WynversCustomEvents extends JavaPlugin {
                                     .registerMechanicFactory(new EnderJammerMechanicFactory(WynversCustomEvents.this), true);
                             getLogger().info("Registered Nexo mechanic '"
                                     + EnderJammerMechanicFactory.MECHANIC_ID + "'.");
+                        }
+                        if (BreachChargeMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new BreachChargeMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + BreachChargeMechanicFactory.MECHANIC_ID + "'.");
+                        }
+                        if (DefuserMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new DefuserMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + DefuserMechanicFactory.MECHANIC_ID + "'.");
                         }
                     } catch (Throwable t) {
                         getLogger().warning(

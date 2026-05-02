@@ -1,0 +1,27 @@
+# Wynvers Custom Events - Reinforced Obsidian (explosion_reducer example)
+#
+# Stack the explosion_reducer mechanic on top of your existing custom obsidian
+# definition (custom_block + wither_properties).
+#
+# reduction_percent works as a flat % HP reduction per non-player break:
+#   reduction_percent: 75   → 25 damage/hit → 4 hits to break
+#   reduction_percent: 50   → 50 damage/hit → 2 hits to break
+#   reduction_percent: 90   → 10 damage/hit → 10 hits to break
+#
+# Player-driven mining is NEVER reduced; only explosion / wither / mob breaks.
+
+reinforced_obsidian:
+  itemname: "<dark_purple>Obsidienne Renforcée</dark_purple>"
+  material: PAPER
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 100
+    wither_properties:
+      block_wither_damage: true
+      block_wither_skull_damage: true
+    explosion_reducer:
+      reduction_percent: 75
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_bettersnow/snow

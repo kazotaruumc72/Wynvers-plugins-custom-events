@@ -267,13 +267,19 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
     }
 
     /**
-     * Cancels the countdown for the given charge and notifies the defuser
-     * (if any). Removes the entity so the charge visually disappears.
+     * Cancels the countdown for the given charge, removes the visual furniture,
+     * and notifies the defuser (if any).
      */
     public void defuse(UUID entityId, Player defuser) {
         BreachChargeManager.ActiveCharge active = manager.remove(entityId);
         if (active == null) return;
         try { active.countdownTask.cancel(); } catch (Throwable ignored) {}
+
+        // Remove the visual furniture so the wall is clear.
+        org.bukkit.entity.Entity entity = Bukkit.getEntity(entityId);
+        if (entity instanceof ItemDisplay base) {
+            try { NexoFurniture.remove(base, null); } catch (Throwable ignored) {}
+        }
 
         Location at = active.wallBlock;
         if (at != null && at.getWorld() != null) {

@@ -14,6 +14,7 @@ import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
 import com.wynvers.customevents.nexo.breachcharge.BreachChargeMechanicFactory;
 import com.wynvers.customevents.nexo.breachcharge.DefuserMechanicFactory;
 import com.wynvers.customevents.nexo.enderjammer.EnderJammerMechanicFactory;
+import com.wynvers.customevents.nexo.explosionreducer.ExplosionReducerMechanicFactory;
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
@@ -138,6 +139,12 @@ public class WynversCustomEvents extends JavaPlugin {
                             getLogger().info("Registered Nexo mechanic '"
                                     + DefuserMechanicFactory.MECHANIC_ID + "'.");
                         }
+                        if (ExplosionReducerMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new ExplosionReducerMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + ExplosionReducerMechanicFactory.MECHANIC_ID + "'.");
+                        }
                     } catch (Throwable t) {
                         getLogger().warning(
                                 "Failed to register custom Nexo mechanic: " + t.getMessage());
@@ -190,6 +197,12 @@ public class WynversCustomEvents extends JavaPlugin {
     public void onDisable() {
         if (HydroDrillMechanicFactory.instance() != null) {
             HydroDrillMechanicFactory.instance().manager().shutdown();
+        }
+        if (BreachChargeMechanicFactory.instance() != null) {
+            BreachChargeMechanicFactory.instance().manager().shutdown();
+        }
+        if (ExplosionReducerMechanicFactory.instance() != null) {
+            ExplosionReducerMechanicFactory.instance().shutdown();
         }
         getLogger().info("WynversCustomEvents disabled.");
     }

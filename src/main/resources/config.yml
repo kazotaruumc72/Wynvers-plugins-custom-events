@@ -118,3 +118,17 @@ harvester-debug: false
 # WorldGuard's normal region-set resolution, so the highest-priority
 # region's value wins as usual.
 
+# ─────────────────────────────────────────────────────────────────────
+# PLACEHOLDERAPI – wce expansion
+# ─────────────────────────────────────────────────────────────────────
+# When PlaceholderAPI is installed, this plugin registers an expansion
+# with identifier `wce`. It exposes the coordinates of the last block
+# the player broke since the server started:
+#
+#   %wce_block_break_x%
+#   %wce_block_break_y%
+#   %wce_block_break_z%
+#
+# Returns an empty string until the player has broken at least one block.
+# State is in-memory and not persisted across restarts.
+

@@ -11,6 +11,7 @@ softdepend:
   - Orestack
   - Nexo
   - WorldGuard
+  - PlaceholderAPI
 
 commands:
   wcereload:

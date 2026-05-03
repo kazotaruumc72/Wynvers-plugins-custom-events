@@ -19,6 +19,7 @@ import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
+import com.wynvers.customevents.papi.WcePlaceholderExpansion;
 import com.wynvers.customevents.worldguard.BlockPriorityFlag;
 import com.wynvers.customevents.worldguard.BlockPriorityListener;
 import org.bukkit.Bukkit;
@@ -212,6 +213,21 @@ public class WynversCustomEvents extends JavaPlugin {
                 && BlockPriorityFlag.get() != null) {
             Bukkit.getPluginManager().registerEvents(new BlockPriorityListener(), this);
             getLogger().info("WorldGuard '" + BlockPriorityFlag.FLAG_NAME + "' flag enabled.");
+        }
+
+        // PlaceholderAPI expansion (last-broken-block coordinates)
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            try {
+                WcePlaceholderExpansion expansion = new WcePlaceholderExpansion(this);
+                if (expansion.register()) {
+                    Bukkit.getPluginManager().registerEvents(expansion, this);
+                    getLogger().info("PlaceholderAPI expansion 'wce' registered.");
+                } else {
+                    getLogger().warning("PlaceholderAPI expansion 'wce' refused to register.");
+                }
+            } catch (Throwable t) {
+                getLogger().warning("Failed to register PlaceholderAPI expansion: " + t.getMessage());
+            }
         }
 
         getLogger().info("WynversCustomEvents v" + getDescription().getVersion() + " enabled.");

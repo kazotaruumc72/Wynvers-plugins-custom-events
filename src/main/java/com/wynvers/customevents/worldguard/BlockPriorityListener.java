@@ -18,11 +18,16 @@ import java.util.Set;
 /**
  * Honors the {@link BlockPriorityFlag} on {@link BlockBreakEvent}.
  *
- * <p>Runs at {@link EventPriority#HIGHEST} <em>after</em> WorldGuard's
- * region-protection listener has had a chance to cancel the event. If the
- * broken block matches an entry in the region's {@code block-priority} set,
- * the event is uncancelled — emulating a block-sized region with higher
- * priority than the surrounding region.
+ * <p>Two-phase strategy:
+ * <ol>
+ *   <li>{@link EventPriority#LOWEST}: if the broken block matches an entry in
+ *       the region's {@code block-priority} set, pre-cancel the event.
+ *       WorldGuard's protection bridge listens with {@code ignoreCancelled=true}
+ *       and therefore skips its check — including the deny message.</li>
+ *   <li>{@link EventPriority#HIGHEST}: uncancel the event so the block actually
+ *       breaks. Net effect: the block is treated as if it lived in a block-sized
+ *       region with higher priority than the surrounding region, silently.</li>
+ * </ol>
  */
 public class BlockPriorityListener implements Listener {
 
@@ -32,22 +37,32 @@ public class BlockPriorityListener implements Listener {
         this.nexoAvailable = Bukkit.getPluginManager().getPlugin("Nexo") != null;
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
-    public void onBlockBreak(BlockBreakEvent event) {
-        if (!event.isCancelled()) return;
-        if (BlockPriorityFlag.get() == null) return;
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onBlockBreakEarly(BlockBreakEvent event) {
+        if (shouldBypass(event.getBlock())) {
+            event.setCancelled(true);
+        }
+    }
 
-        Block block = event.getBlock();
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onBlockBreakLate(BlockBreakEvent event) {
+        if (!event.isCancelled()) return;
+        if (shouldBypass(event.getBlock())) {
+            event.setCancelled(false);
+        }
+    }
+
+    private boolean shouldBypass(Block block) {
+        if (BlockPriorityFlag.get() == null) return false;
+
         RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
         RegionQuery query = container.createQuery();
         ApplicableRegionSet regions = query.getApplicableRegions(BukkitAdapter.adapt(block.getLocation()));
 
         Set<String> allowed = regions.queryValue(null, BlockPriorityFlag.get());
-        if (allowed == null || allowed.isEmpty()) return;
+        if (allowed == null || allowed.isEmpty()) return false;
 
-        if (matches(block, allowed)) {
-            event.setCancelled(false);
-        }
+        return matches(block, allowed);
     }
 
     private boolean matches(Block block, Set<String> allowed) {

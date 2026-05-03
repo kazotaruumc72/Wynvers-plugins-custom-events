@@ -10,6 +10,7 @@ authors:
 softdepend:
   - Orestack
   - Nexo
+  - WorldGuard
 
 commands:
   wcereload:

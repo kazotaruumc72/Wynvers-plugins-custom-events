@@ -19,6 +19,8 @@ import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
+import com.wynvers.customevents.worldguard.BlockPriorityFlag;
+import com.wynvers.customevents.worldguard.BlockPriorityListener;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -54,6 +56,21 @@ public class WynversCustomEvents extends JavaPlugin {
     private FarmerEventListener farmerListener;
     private HarvesterEventListener harvesterListener;
     private TeleporterSetupManager teleporterSetupManager;
+
+    @Override
+    public void onLoad() {
+        // WorldGuard custom flags MUST be registered during onLoad(), before
+        // WG starts loading region data. Skip silently when WG is absent.
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
+            try {
+                BlockPriorityFlag.register();
+                getLogger().info("Registered WorldGuard flag '" + BlockPriorityFlag.FLAG_NAME + "'.");
+            } catch (Throwable t) {
+                getLogger().warning("Failed to register WorldGuard flag '"
+                        + BlockPriorityFlag.FLAG_NAME + "': " + t.getMessage());
+            }
+        }
+    }
 
     @Override
     public void onEnable() {
@@ -188,6 +205,13 @@ public class WynversCustomEvents extends JavaPlugin {
             getLogger().info("Teleporter mechanic enabled.");
         } else {
             getLogger().warning("Nexo not found - 'giveItem NexoItems:' actions will be skipped.");
+        }
+
+        // WorldGuard 'block-priority' flag listener
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null
+                && BlockPriorityFlag.get() != null) {
+            Bukkit.getPluginManager().registerEvents(new BlockPriorityListener(), this);
+            getLogger().info("WorldGuard '" + BlockPriorityFlag.FLAG_NAME + "' flag enabled.");
         }
 
         getLogger().info("WynversCustomEvents v" + getDescription().getVersion() + " enabled.");

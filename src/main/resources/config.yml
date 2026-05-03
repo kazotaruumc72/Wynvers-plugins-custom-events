@@ -91,3 +91,30 @@ wither-debug: false
 # Enable verbose logging for all harvester operations (debug mode)
 harvester-debug: false
 
+# ─────────────────────────────────────────────────────────────────────
+# WORLDGUARD – block-priority flag
+# ─────────────────────────────────────────────────────────────────────
+# When WorldGuard is installed, this plugin registers a custom region
+# flag named `block-priority`. It is a SET of block ids: every entry
+# behaves as if it had its own block-sized region with higher priority
+# than the surrounding region — meaning those specific blocks remain
+# breakable even if the region's `block-break` flag is set to `deny`.
+#
+# Typical use case: keep `block-break: deny` on your spawn region to
+# protect builds, while still allowing players to mine specific ores
+# you placed for a spawn-mine system.
+#
+# Entry formats accepted (mix freely, comma-separated when set via /rg):
+#   stone                       vanilla material (Bukkit Material name)
+#   minecraft:iron_ore          vanilla, explicit prefix
+#   enchanted_cobblestone       Nexo custom block id
+#   nexo:enchanted_cobblestone  Nexo, explicit prefix
+#
+# Example commands:
+#   /rg flag spawn block-priority stone,iron_ore,enchanted_cobblestone
+#   /rg flag spawn block-break deny
+#
+# Stacking with multiple regions / priorities: the flag is queried with
+# WorldGuard's normal region-set resolution, so the highest-priority
+# region's value wins as usual.
+

@@ -132,3 +132,58 @@ harvester-debug: false
 # Returns an empty string until the player has broken at least one block.
 # State is in-memory and not persisted across restarts.
 
+# ─────────────────────────────────────────────────────────────────────
+# ROSELOOT – Nexo integration
+# ─────────────────────────────────────────────────────────────────────
+# When BOTH RoseLoot and Nexo are installed, this plugin registers:
+#
+#   - condition `nexo-block:<id>` — true when the looted block is the
+#     given Nexo custom block.
+#   - loot item type `set_nexo_block` — places a Nexo custom block at a
+#     location offset (mirrors the YAML shape of RoseLoot's set_block,
+#     but resolves `block:` as a Nexo id).
+#
+# RoseLoot's built-in `set_block` is NOT extensible (it parses `block:`
+# strictly as a Bukkit Material), so use `set_nexo_block` for Nexo
+# blocks specifically.
+#
+# Example loot table (drop a Nexo gem when an amethyst_stone_ore Nexo
+# block is mined with a diamond/netherite pickaxe, then replace with
+# bedrock for 3s, then restore the original Nexo block):
+#
+#   type: BLOCK
+#   conditions:
+#     - 'nexo-block:amethyst_stone_ore'
+#   pools:
+#     0:
+#       entries:
+#         0:
+#           conditions:
+#             - 'placeholder:%checkitem_mat:diamond_pickaxe,inhand:main%=yes||placeholder:%checkitem_mat:netherite_pickaxe,inhand:main%=yes'
+#           items:
+#             0:
+#               type: custom_item
+#               plugin: nexo
+#               item: amethyst_gem_base
+#               amount: 1
+#             1:
+#               type: set_block
+#               block: 'bedrock'
+#               relative-to: looter
+#               x: '%x%'
+#               y: '%y%'
+#               z: '%z%'
+#               replace: true
+#             2:
+#               type: delay
+#               value: 60
+#               items:
+#                 0:
+#                   type: set_nexo_block      # NOT set_block
+#                   block: amethyst_stone_ore # Nexo id, no prefix
+#                   relative-to: looter
+#                   x: '%x%'
+#                   y: '%y%'
+#                   z: '%z%'
+#                   replace: true
+

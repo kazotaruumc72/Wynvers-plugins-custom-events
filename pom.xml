@@ -66,6 +66,11 @@
             <id>placeholderapi</id>
             <url>https://repo.extendedclip.com/content/repositories/placeholderapi/</url>
         </repository>
+        <!-- Rosewood (RoseLoot) -->
+        <repository>
+            <id>rosewood-public</id>
+            <url>https://repo.rosewooddev.io/repository/public/</url>
+        </repository>
     </repositories>
 
     <dependencies>
@@ -106,6 +111,14 @@
             <groupId>me.clip</groupId>
             <artifactId>placeholderapi</artifactId>
             <version>2.11.6</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- RoseLoot (soft dependency, custom condition + loot item) -->
+        <dependency>
+            <groupId>dev.rosewood</groupId>
+            <artifactId>roseloot</artifactId>
+            <version>1.4.1</version>
             <scope>provided</scope>
         </dependency>
 

@@ -20,6 +20,8 @@ import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
 import com.wynvers.customevents.papi.WcePlaceholderExpansion;
+import com.wynvers.customevents.roseloot.NexoBlockCondition;
+import com.wynvers.customevents.roseloot.SetNexoBlockLootItem;
 import com.wynvers.customevents.worldguard.BlockPriorityFlag;
 import com.wynvers.customevents.worldguard.BlockPriorityListener;
 import org.bukkit.Bukkit;
@@ -213,6 +215,22 @@ public class WynversCustomEvents extends JavaPlugin {
                 && BlockPriorityFlag.get() != null) {
             Bukkit.getPluginManager().registerEvents(new BlockPriorityListener(), this);
             getLogger().info("WorldGuard '" + BlockPriorityFlag.FLAG_NAME + "' flag enabled.");
+        }
+
+        // RoseLoot integration: nexo-block condition + set_nexo_block loot item
+        if (Bukkit.getPluginManager().getPlugin("RoseLoot") != null
+                && Bukkit.getPluginManager().getPlugin("Nexo") != null) {
+            try {
+                var api = dev.rosewood.roseloot.api.RoseLootAPI.getInstance();
+                if (api.registerCustomLootCondition("nexo-block", NexoBlockCondition::parse)) {
+                    getLogger().info("Registered RoseLoot condition 'nexo-block'.");
+                }
+                if (api.registerCustomLootItem("set_nexo_block", SetNexoBlockLootItem::fromSection)) {
+                    getLogger().info("Registered RoseLoot loot item 'set_nexo_block'.");
+                }
+            } catch (Throwable t) {
+                getLogger().warning("Failed to register RoseLoot integration: " + t.getMessage());
+            }
         }
 
         // PlaceholderAPI expansion (last-broken-block coordinates)

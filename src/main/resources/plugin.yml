@@ -12,6 +12,7 @@ softdepend:
   - Nexo
   - WorldGuard
   - PlaceholderAPI
+  - RoseLoot
 
 commands:
   wcereload:

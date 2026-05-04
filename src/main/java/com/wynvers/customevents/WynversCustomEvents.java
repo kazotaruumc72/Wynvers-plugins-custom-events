@@ -17,6 +17,7 @@ import com.wynvers.customevents.nexo.enderjammer.EnderJammerMechanicFactory;
 import com.wynvers.customevents.nexo.explosionreducer.ExplosionReducerMechanicFactory;
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
+import com.wynvers.customevents.nexo.runeshop.ShopRuneMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
 import com.wynvers.customevents.papi.WcePlaceholderExpansion;
@@ -165,6 +166,12 @@ public class WynversCustomEvents extends JavaPlugin {
                             getLogger().info("Registered Nexo mechanic '"
                                     + ExplosionReducerMechanicFactory.MECHANIC_ID + "'.");
                         }
+                        if (ShopRuneMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new ShopRuneMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + ShopRuneMechanicFactory.MECHANIC_ID + "'.");
+                        }
                     } catch (Throwable t) {
                         getLogger().warning(
                                 "Failed to register custom Nexo mechanic: " + t.getMessage());
@@ -261,6 +268,9 @@ public class WynversCustomEvents extends JavaPlugin {
         }
         if (ExplosionReducerMechanicFactory.instance() != null) {
             ExplosionReducerMechanicFactory.instance().shutdown();
+        }
+        if (ShopRuneMechanicFactory.instance() != null) {
+            ShopRuneMechanicFactory.instance().shutdown();
         }
         getLogger().info("WynversCustomEvents disabled.");
     }

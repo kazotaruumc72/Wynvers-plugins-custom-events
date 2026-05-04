@@ -1,0 +1,34 @@
+# Wynvers Custom Events - Shop Boost Rune
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Run: /nexo reload
+#
+# USAGE:
+# - Give the rune: /nexo give <player> shop_boost_rune
+# - Drag the rune (left- or right-click) onto an armor piece in your inventory
+#   to apply it. A random percent in the configured range is rolled and stored
+#   on that armor; the rune is consumed.
+# - While the armor is equipped, every zShop sell is boosted by +X% and every
+#   buy is reduced by -X% (sum across all four armor slots). Buy price is
+#   clamped to >= 0 so a 100%+ total simply makes the item free.
+# - After `time` seconds, the rune disappears automatically and the original
+#   armor lore is restored.
+#
+# Mechanic key:
+#   rune_boost_zshop_sell_buy_percent:
+#     boost: '1-300'              # range or single value, in percent
+#     time: '86400'               # rune lifetime once applied, in seconds
+#     color_lore_rune: '&a'       # color of the rune lore line + countdown
+
+shop_boost_rune:
+  itemname: "<green>Rune – Boost Shop</green>"
+  material: ECHO_SHARD
+  lore:
+    - "&7Drop sur une armure pour"
+    - "&7booster les prix zShop."
+  Mechanics:
+    rune_boost_zshop_sell_buy_percent:
+      boost: '1-300'
+      time: '86400'
+      color_lore_rune: '&a'

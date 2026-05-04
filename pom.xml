@@ -122,6 +122,17 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- zShop API (soft dependency, rune-shop mechanic). The jar is bundled
+             in the project's lib/ directory because the zShop API has no
+             public Maven repository. -->
+        <dependency>
+            <groupId>fr.maxlego08</groupId>
+            <artifactId>zshop-api</artifactId>
+            <version>4.0.0-SNAPSHOT</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/zshop-api.jar</systemPath>
+        </dependency>
+
         <!-- Kotlin stdlib (required to extend Nexo's Kotlin abstract classes) -->
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>

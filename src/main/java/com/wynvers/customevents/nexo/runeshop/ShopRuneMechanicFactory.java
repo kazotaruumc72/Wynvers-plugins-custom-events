@@ -13,6 +13,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
@@ -117,41 +118,112 @@ public class ShopRuneMechanicFactory extends MechanicFactory implements Listener
 
     // ─── Apply on drag-drop ─────────────────────────────────────────────────
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    /**
+     * Triggered when the player clicks (or shift-clicks, hot-bar swaps, etc.)
+     * a slot while holding a rune on the cursor. We accept any click type
+     * that ends with the rune on the cursor and an armor item in the target
+     * slot — including the four armor-equip slots, where Bukkit otherwise
+     * blocks the drop (the rune isn't armor, so it can't equip).
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
-        // The "drag-drop" gesture is: rune on cursor, target armor in slot.
         ItemStack cursor = event.getCursor();
-        ItemStack target = event.getCurrentItem();
         if (cursor == null || cursor.getType().isAir()) return;
-        if (target == null || target.getType().isAir()) return;
-
         ShopRuneMechanic rune = getMechanic(cursor);
         if (rune == null) return;
-        if (!isArmor(target.getType())) return;
 
+        ItemStack target = event.getCurrentItem();
+        if (target == null || target.getType().isAir() || !isArmor(target.getType())) {
+            // Cursor is a rune but the player aimed at an empty slot or a
+            // non-armor item — give them a hint instead of silently swapping
+            // the rune into the slot.
+            if (event.getClickedInventory() != null) {
+                event.setCancelled(true);
+                event.setResult(org.bukkit.event.Event.Result.DENY);
+                player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                        "&cFais glisser la rune sur une pièce d'armure (équipée ou en inventaire)."));
+                player.updateInventory();
+            }
+            return;
+        }
+
+        // Reject only obviously irrelevant clicks.
         ClickType click = event.getClick();
-        if (click != ClickType.LEFT && click != ClickType.RIGHT) return;
+        if (click == ClickType.DROP || click == ClickType.CONTROL_DROP
+                || click == ClickType.DOUBLE_CLICK) {
+            return;
+        }
 
         event.setCancelled(true);
+        event.setResult(org.bukkit.event.Event.Result.DENY);
 
         int pct = rune.rollPercent();
         long until = System.currentTimeMillis() + rune.durationSeconds() * 1000L;
         applyRune(target, pct, until, rune.colorCode());
+        // Re-write the slot explicitly in case Bukkit reverts the meta on
+        // the cancelled click on the next tick.
+        event.setCurrentItem(target);
 
-        // Consume one rune from the cursor.
         if (cursor.getAmount() <= 1) {
-            event.setCursor(null);
+            event.getView().setCursor(null);
         } else {
             cursor.setAmount(cursor.getAmount() - 1);
-            event.setCursor(cursor);
+            event.getView().setCursor(cursor);
         }
 
         player.updateInventory();
         player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 rune.colorCode() + "Rune appliquée : Boost shop +" + pct + "% pendant "
                         + formatDuration(rune.durationSeconds()) + "."));
+        plugin.getLogger().info("[ShopRune] Applied " + pct + "% to "
+                + target.getType() + " for " + player.getName()
+                + " (click=" + click + ").");
+    }
+
+    /**
+     * Mouse-held drag (Bukkit fires {@link InventoryDragEvent} instead of a
+     * click when the player presses-and-drags the rune to a slot). Apply if
+     * the drag covers exactly one armor slot whose target item is armor.
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        ItemStack cursor = event.getOldCursor();
+        if (cursor == null || cursor.getType().isAir()) return;
+        ShopRuneMechanic rune = getMechanic(cursor);
+        if (rune == null) return;
+        if (event.getRawSlots().size() != 1) return;
+
+        int rawSlot = event.getRawSlots().iterator().next();
+        ItemStack target = event.getView().getItem(rawSlot);
+        if (target == null || target.getType().isAir()) return;
+        if (!isArmor(target.getType())) return;
+
+        event.setCancelled(true);
+        event.setResult(org.bukkit.event.Event.Result.DENY);
+
+        int pct = rune.rollPercent();
+        long until = System.currentTimeMillis() + rune.durationSeconds() * 1000L;
+        applyRune(target, pct, until, rune.colorCode());
+        event.getView().setItem(rawSlot, target);
+
+        // The drag never committed, so the cursor still has the full original
+        // stack. Subtract one rune.
+        if (cursor.getAmount() <= 1) {
+            event.getView().setCursor(null);
+        } else {
+            cursor.setAmount(cursor.getAmount() - 1);
+            event.getView().setCursor(cursor);
+        }
+
+        player.updateInventory();
+        player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                rune.colorCode() + "Rune appliquée : Boost shop +" + pct + "% pendant "
+                        + formatDuration(rune.durationSeconds()) + "."));
+        plugin.getLogger().info("[ShopRune] Drag-applied " + pct + "% to "
+                + target.getType() + " for " + player.getName() + ".");
     }
 
     // ─── Lore refresh on inventory open ────────────────────────────────────

@@ -12,11 +12,12 @@ import org.bukkit.event.Listener;
 /**
  * Adjusts zShop transaction prices based on the player's active shop runes.
  *
- * <p>Sell price is multiplied by {@code (1 + sum/100)} (more money on sell)
- * and buy price by {@code (1 - sum/100)} (cheaper on buy), where {@code sum}
- * is the total of all active rune percentages on the player's equipped armor.
- * Buy price is clamped to {@code >= 0} so a 100%+ total simply makes the item
- * free, never negative.
+ * <p>Let {@code k = sum/100} be the total active rune percent on the wearer.
+ * Sell price is multiplied by {@code (1 + k)} (more money on sell). Buy price
+ * is multiplied by {@code max(0.5, 1 / (1 + k))} — a multiplicative discount
+ * <strong>capped at 50% off</strong>, so the rune can never reduce the buy
+ * price below half. Examples: 50% rune → 33% off, 100% rune → 50% off (cap),
+ * 300% rune → still 50% off.
  *
  * <p>This class is only registered when the zShop plugin is present, so that
  * the rest of the rune mechanic loads cleanly without zShop on the classpath.
@@ -34,9 +35,8 @@ public class ShopRuneZShopListener implements Listener {
         Player player = event.getPlayer();
         int sum = factory.sumActivePercent(player);
         if (sum <= 0) return;
-        double newPrice = event.getPrice() * (1.0 - sum / 100.0);
-        if (newPrice < 0) newPrice = 0;
-        event.setPrice(newPrice);
+        double mult = Math.max(0.5, 1.0 / (1.0 + sum / 100.0));
+        event.setPrice(event.getPrice() * mult);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)

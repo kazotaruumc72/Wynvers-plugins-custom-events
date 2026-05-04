@@ -317,7 +317,7 @@ public class ShopRuneMechanicFactory extends MechanicFactory implements Listener
         lines.add(ChatColor.translateAlternateColorCodes('&', "&6Runes:"));
         lines.add(ChatColor.translateAlternateColorCodes('&', "&7- ") + color + "Boost shop +" + pct + "%");
         lines.add("");
-        lines.add(ChatColor.translateAlternateColorCodes('&', "&7Durée:"));
+        lines.add(ChatColor.translateAlternateColorCodes('&', "&6Durée:"));
         lines.add(ChatColor.translateAlternateColorCodes('&', "&7- ") + color + formatDuration(remaining));
         return lines;
     }

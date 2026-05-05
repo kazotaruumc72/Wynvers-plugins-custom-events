@@ -2,6 +2,7 @@ package com.wynvers.customevents.integration;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import java.lang.reflect.Constructor;
@@ -33,6 +34,8 @@ public final class SaberFactionsHook {
     // Reflection handles
     private static Method boardGetInstance;
     private static Method boardGetFactionAt;
+    private static Method boardSetFactionAt;
+    private static Method boardRemoveAt;
     private static Method fPlayersGetInstance;
     private static Method fPlayersGetByPlayer;
     private static Method fPlayerGetFaction;
@@ -40,9 +43,13 @@ public final class SaberFactionsHook {
     private static Method factionIsSafeZone;
     private static Method factionIsWarZone;
     private static Method factionGetFPlayers;
+    private static Method factionGetAllClaims;
+    private static Method factionGetTag;
     private static Method fPlayerIsOnline;
     private static Method fPlayerGetPlayer;
     private static Method factionGetRelationTo;
+    private static Method flocGetX;
+    private static Method flocGetZ;
     private static Object enemyRelation;
 
     // FLocation builder strategy chosen at init time.
@@ -84,8 +91,17 @@ public final class SaberFactionsHook {
             factionIsSafeZone = tryMethod(factionCls, "isSafeZone");
             factionIsWarZone = tryMethod(factionCls, "isWarZone");
             factionGetFPlayers = tryMethod(factionCls, "getFPlayers");
+            factionGetAllClaims = tryMethod(factionCls, "getAllClaims");
+            factionGetTag = tryMethod(factionCls, "getTag");
             fPlayerIsOnline = tryMethod(fPlayerCls, "isOnline");
             fPlayerGetPlayer = tryMethod(fPlayerCls, "getPlayer");
+
+            // Claim setter — used by Base Claim Protector. Best-effort: if missing,
+            // base-claim-protector will just refuse to claim.
+            boardSetFactionAt = tryMethod(boardCls, "setFactionAt", factionCls, fLocCls);
+            boardRemoveAt = tryMethod(boardCls, "removeAt", fLocCls);
+            flocGetX = tryMethod(fLocCls, "getX");
+            flocGetZ = tryMethod(fLocCls, "getZ");
             @SuppressWarnings({"unchecked", "rawtypes"})
             Object enemy = Enum.valueOf((Class<Enum>) relationCls, "ENEMY");
             enemyRelation = enemy;
@@ -233,6 +249,209 @@ public final class SaberFactionsHook {
         Object board = boardGetInstance.invoke(null);
         Object floc = fLocationBuilder.build(location);
         return boardGetFactionAt.invoke(board, floc);
+    }
+
+    /**
+     * Returns the player's faction (FactionsUUID/SaberFactions {@code Faction}
+     * object) or {@code null} when the player is factionless or the API is
+     * unavailable. The caller treats it as an opaque token.
+     */
+    public static Object getPlayerFaction(Player player) {
+        init();
+        if (!available) return null;
+        try {
+            Object fPlayers = fPlayersGetInstance.invoke(null);
+            Object fPlayer = fPlayersGetByPlayer.invoke(fPlayers, player);
+            if (fPlayer == null) return null;
+            Object faction = fPlayerGetFaction.invoke(fPlayer);
+            if (faction == null) return null;
+            if ((boolean) factionIsWilderness.invoke(faction)) return null;
+            return faction;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * Returns the chunk coordinates ({@code [chunkX, chunkZ]}) of the centroid
+     * of the player's faction's claimed land, or {@code null} when:
+     * <ul>
+     *   <li>The Factions API is unavailable,</li>
+     *   <li>The player has no faction,</li>
+     *   <li>The faction has no claims,</li>
+     *   <li>The {@code getAllClaims} reflection target is missing on this fork.</li>
+     * </ul>
+     *
+     * <p>The centroid is the average chunk-coordinate across all claimed
+     * chunks; we then snap to the actually-claimed chunk closest to that
+     * average so the result is a real chunk owned by the faction.
+     */
+    public static int[] getFactionCenterChunk(Player player) {
+        init();
+        if (!available) return null;
+        if (factionGetAllClaims == null || flocGetX == null || flocGetZ == null) return null;
+        try {
+            Object faction = getPlayerFaction(player);
+            if (faction == null) return null;
+
+            Object claims = factionGetAllClaims.invoke(faction);
+            if (!(claims instanceof Collection<?> coll) || coll.isEmpty()) return null;
+
+            double sumX = 0, sumZ = 0;
+            int count = 0;
+            for (Object floc : coll) {
+                if (floc == null) continue;
+                sumX += ((Number) flocGetX.invoke(floc)).doubleValue();
+                sumZ += ((Number) flocGetZ.invoke(floc)).doubleValue();
+                count++;
+            }
+            if (count == 0) return null;
+            double avgX = sumX / count;
+            double avgZ = sumZ / count;
+
+            int bestX = 0, bestZ = 0;
+            double bestDist = Double.MAX_VALUE;
+            boolean found = false;
+            for (Object floc : coll) {
+                if (floc == null) continue;
+                int cx = ((Number) flocGetX.invoke(floc)).intValue();
+                int cz = ((Number) flocGetZ.invoke(floc)).intValue();
+                double dx = cx - avgX;
+                double dz = cz - avgZ;
+                double d = dx * dx + dz * dz;
+                if (d < bestDist) {
+                    bestDist = d;
+                    bestX = cx;
+                    bestZ = cz;
+                    found = true;
+                }
+            }
+            return found ? new int[]{bestX, bestZ} : null;
+        } catch (Throwable t) {
+            LOG.warning("getFactionCenterChunk failed: " + t.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Returns {@code true} if the chunk containing {@code location} is the
+     * centroid chunk of the player's faction's claims.
+     */
+    public static boolean isAtFactionBaseCenter(Player player, Location location) {
+        int[] center = getFactionCenterChunk(player);
+        if (center == null) return false;
+        int placedX = location.getBlockX() >> 4;
+        int placedZ = location.getBlockZ() >> 4;
+        return center[0] == placedX && center[1] == placedZ;
+    }
+
+    /**
+     * Claims a single chunk for the player's faction by directly writing to
+     * the Board, bypassing the regular {@code /f claim} flow (and therefore
+     * its power check). Returns {@code true} when the claim was applied,
+     * {@code false} when the chunk was already claimed by some non-wilderness
+     * faction, or when the API is unavailable.
+     *
+     * <p>Use carefully: this overwrites whatever was previously at the chunk
+     * if the caller chose to call it on non-wilderness, so the caller is
+     * expected to filter wilderness via {@link #isChunkWilderness} first.
+     */
+    public static boolean setFactionAtChunk(Player player, World world, int chunkX, int chunkZ) {
+        init();
+        if (!available) return false;
+        if (boardSetFactionAt == null) return false;
+        if (world == null) return false;
+        try {
+            Object faction = getPlayerFaction(player);
+            if (faction == null) return false;
+
+            Location proxy = new Location(world, (chunkX << 4) + 8, 64, (chunkZ << 4) + 8);
+            Object floc = fLocationBuilder.build(proxy);
+            Object board = boardGetInstance.invoke(null);
+            boardSetFactionAt.invoke(board, faction, floc);
+            return true;
+        } catch (Throwable t) {
+            LOG.warning("setFactionAtChunk failed: " + t.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Returns {@code true} if the chunk at the given coordinates is currently
+     * unclaimed (wilderness). Returns {@code false} when the chunk belongs to
+     * any faction (including SafeZone / WarZone) or the API is unavailable.
+     */
+    public static boolean isChunkWilderness(World world, int chunkX, int chunkZ) {
+        init();
+        if (!available) return false;
+        if (world == null) return false;
+        try {
+            Location proxy = new Location(world, (chunkX << 4) + 8, 64, (chunkZ << 4) + 8);
+            Object faction = factionAt(proxy);
+            if (faction == null) return true;
+            return (boolean) factionIsWilderness.invoke(faction);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * Releases the claim on the given chunk, returning it to wilderness. No-op
+     * if the chunk is already wilderness, the API is missing, or the
+     * {@code Board.removeAt} method isn't exposed by this fork.
+     */
+    public static boolean unclaimChunk(World world, int chunkX, int chunkZ) {
+        init();
+        if (!available) return false;
+        if (boardRemoveAt == null || world == null) return false;
+        try {
+            Location proxy = new Location(world, (chunkX << 4) + 8, 64, (chunkZ << 4) + 8);
+            Object floc = fLocationBuilder.build(proxy);
+            Object board = boardGetInstance.invoke(null);
+            boardRemoveAt.invoke(board, floc);
+            return true;
+        } catch (Throwable t) {
+            LOG.warning("unclaimChunk failed: " + t.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Returns the faction tag (display name) of the faction owning the chunk
+     * at {@code location}, or {@code null} when wilderness, missing API, or
+     * the {@code Faction.getTag} accessor isn't exposed. Used for messaging.
+     */
+    public static String getFactionTagAt(Location location) {
+        init();
+        if (!available) return null;
+        if (factionGetTag == null) return null;
+        try {
+            Object faction = factionAt(location);
+            if (faction == null) return null;
+            if ((boolean) factionIsWilderness.invoke(faction)) return null;
+            Object tag = factionGetTag.invoke(faction);
+            return tag != null ? tag.toString() : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * Returns the faction tag (display name) for the player's faction, or
+     * {@code null} when factionless / unavailable. Used for messaging only.
+     */
+    public static String getPlayerFactionTag(Player player) {
+        init();
+        if (!available) return null;
+        if (factionGetTag == null) return null;
+        try {
+            Object faction = getPlayerFaction(player);
+            if (faction == null) return null;
+            Object tag = factionGetTag.invoke(faction);
+            return tag != null ? tag.toString() : null;
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     private static Method tryMethod(Class<?> cls, String name, Class<?>... params) {

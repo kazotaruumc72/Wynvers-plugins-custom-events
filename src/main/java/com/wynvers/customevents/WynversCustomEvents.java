@@ -11,6 +11,7 @@ import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
 import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
+import com.wynvers.customevents.nexo.baseclaimprotector.BaseClaimProtectorMechanicFactory;
 import com.wynvers.customevents.nexo.breachcharge.BreachChargeMechanicFactory;
 import com.wynvers.customevents.nexo.breachcharge.DefuserMechanicFactory;
 import com.wynvers.customevents.nexo.enderjammer.EnderJammerMechanicFactory;
@@ -166,6 +167,12 @@ public class WynversCustomEvents extends JavaPlugin {
                             getLogger().info("Registered Nexo mechanic '"
                                     + ExplosionReducerMechanicFactory.MECHANIC_ID + "'.");
                         }
+                        if (BaseClaimProtectorMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new BaseClaimProtectorMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + BaseClaimProtectorMechanicFactory.MECHANIC_ID + "'.");
+                        }
                         if (ShopRuneMechanicFactory.instance() == null) {
                             com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
                                     .registerMechanicFactory(new ShopRuneMechanicFactory(WynversCustomEvents.this), true);
@@ -271,6 +278,9 @@ public class WynversCustomEvents extends JavaPlugin {
         }
         if (ShopRuneMechanicFactory.instance() != null) {
             ShopRuneMechanicFactory.instance().shutdown();
+        }
+        if (BaseClaimProtectorMechanicFactory.instance() != null) {
+            BaseClaimProtectorMechanicFactory.instance().shutdown();
         }
         getLogger().info("WynversCustomEvents disabled.");
     }

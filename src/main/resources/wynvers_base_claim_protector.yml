@@ -1,0 +1,77 @@
+# Wynvers Custom Events - Base Claim Protector
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Run: /nexo reload
+#
+# USAGE:
+#   /give @p paper{NexoID:"base_claim_protector"}
+#   - The block must be placed inside the centroid chunk of your faction's
+#     claimed land (the "centre" of your base). Placing anywhere else is
+#     refused with the centroid chunk coordinates printed in chat.
+#   - After placement, throw a Nexo food item from the `food:` list on top of
+#     the block. Each recipe has its own time. When the recipe's amount is
+#     fully fed, every wilderness chunk within `radius` is claimed for your
+#     faction WITHOUT consuming power, for the configured time.
+#   - A hologram above the block displays the remaining time.
+#   - When the time expires, the bonus chunks are released back to wilderness
+#     and the furniture is swapped to `depleted_nexo_id` (no more food).
+#     Re-feed the active variant to start a new cycle... or break the
+#     depleted block and place a fresh active one.
+#
+# REQUIREMENTS:
+#   - SaberFactions or FactionsUUID at runtime.
+#   - Player must belong to a non-wilderness faction with at least one claim.
+#
+# RECIPE FORMAT:
+#   Each line in `food:` is a recipe of the form:
+#     "item:nexo:<id>, amount:<n>, time:<duration>"
+#   - `item:nexo:<id>` (or just `item:<id>`)  — accepted Nexo item id
+#   - `amount:<n>`  optional, default 1
+#   - `time:<n>{s|m|h|d}`  required — bonus duration (s, m, h, d)
+
+base_claim_protector:
+  itemname: "<gold>Protecteur de Base</gold>"
+  material: PAPER
+  Mechanics:
+    furniture:
+      type: ITEM_DISPLAY
+      hitbox:
+        height: 1.0
+        width: 1.0
+    base_claim_protector:
+      # Claim radius in chunks. radius: 3 -> 7x7 area = 49 chunks max.
+      radius: 3
+      # Recipes (Nexo items only). Each recipe sets its own bonus time.
+      food:
+        - "item:nexo:basic_fuel, amount:1, time:3h"
+        - "item:nexo:rich_fuel, amount:1, time:1d"
+      # Detection radius (in blocks) above the protector for thrown items.
+      feed_radius: 1.5
+      # If true, the block is removed entirely on expiry (no texture swap).
+      consume_on_expire: false
+      # Nexo id of the visual swap when the bonus expires (empty = leave as-is).
+      depleted_nexo_id: "base_claim_protector_depleted"
+      particle: HEART
+      feed_sound: ENTITY_GENERIC_EAT
+      claim_sound: BLOCK_BEACON_ACTIVATE
+      expire_sound: BLOCK_BEACON_DEACTIVATE
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_bettersnow/snow
+
+# Visual-only "depleted" variant: same furniture footprint, different texture.
+# Has NO mechanic (no food, no claim) — purely a marker that the protector ran
+# out of food. Break it and place a fresh `base_claim_protector` to restart.
+base_claim_protector_depleted:
+  itemname: "<dark_gray>Protecteur de Base (épuisé)</dark_gray>"
+  material: PAPER
+  Mechanics:
+    furniture:
+      type: ITEM_DISPLAY
+      hitbox:
+        height: 1.0
+        width: 1.0
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_bettersnow/snow_depleted

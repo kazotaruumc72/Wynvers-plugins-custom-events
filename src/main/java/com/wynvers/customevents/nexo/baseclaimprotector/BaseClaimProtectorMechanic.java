@@ -11,22 +11,23 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Real Nexo {@link Mechanic} for the Base Claim Protector furniture block.
+ * Real Nexo {@link Mechanic} for the Base Claim Protector custom_block.
  *
  * <p>YAML example (top-level inside {@code Mechanics:} of an item):
  * <pre>
  * base_claim_protector:
  *   Mechanics:
- *     furniture:
- *       type: ITEM_DISPLAY
- *       hitbox: { height: 1.0, width: 1.0 }
+ *     custom_block:
+ *       type: NOTEBLOCK
+ *       custom_variation: 476
  *     base_claim_protector:
  *       radius: 3                          # claim radius in chunks (3 = 7x7)
  *       food:                              # list of recipes (Nexo items only)
  *         - "item:nexo:basic_fuel, time:3h"
  *         - "item:nexo:rich_fuel, amount:5, time:1d"
  *       feed_radius: 1.5                   # detection radius above the block
- *       consume_on_expire: true            # remove furniture when bonus expires
+ *       consume_on_expire: true            # remove block when bonus expires
+ *       depleted_nexo_id: base_claim_protector_depleted
  *       particle: HEART
  *       feed_sound: ENTITY_GENERIC_EAT
  *       claim_sound: BLOCK_BEACON_ACTIVATE

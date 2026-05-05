@@ -14,6 +14,8 @@ softdepend:
   - PlaceholderAPI
   - RoseLoot
   - zShop
+  - Factions
+  - SaberFactions
 
 commands:
   wcereload:

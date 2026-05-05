@@ -30,6 +30,7 @@ public final class SaberFactionsHook {
 
     private static boolean initialized = false;
     private static boolean available = false;
+    private static boolean warnedNotDetected = false;
 
     // Reflection handles
     private static Method boardGetInstance;
@@ -63,14 +64,18 @@ public final class SaberFactionsHook {
 
     private static synchronized void init() {
         if (initialized) return;
-        initialized = true;
 
         if (Bukkit.getPluginManager().getPlugin("Factions") == null
                 && Bukkit.getPluginManager().getPlugin("SaberFactions") == null) {
-            LOG.warning("Factions plugin not detected — claim checks will allow all placements.");
+            if (!warnedNotDetected) {
+                LOG.warning("Factions plugin not detected — claim checks will allow all placements.");
+                warnedNotDetected = true;
+            }
+            // Leave initialized=false so a later call retries once the plugin loads.
             return;
         }
 
+        initialized = true;
         try {
             Class<?> boardCls = Class.forName("com.massivecraft.factions.Board");
             Class<?> fLocCls = Class.forName("com.massivecraft.factions.FLocation");

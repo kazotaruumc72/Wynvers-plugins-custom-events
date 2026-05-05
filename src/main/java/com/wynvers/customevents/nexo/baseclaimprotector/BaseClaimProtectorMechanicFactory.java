@@ -1,15 +1,17 @@
 package com.wynvers.customevents.nexo.baseclaimprotector;
 
-import com.nexomc.nexo.api.NexoFurniture;
+import com.nexomc.nexo.api.NexoBlocks;
 import com.nexomc.nexo.api.NexoItems;
-import com.nexomc.nexo.api.events.furniture.NexoFurnitureBreakEvent;
+import com.nexomc.nexo.api.events.custom_block.NexoBlockBreakEvent;
 import com.nexomc.nexo.mechanics.Mechanic;
 import com.nexomc.nexo.mechanics.MechanicFactory;
+import com.nexomc.nexo.mechanics.custom_block.CustomBlockMechanic;
 import com.wynvers.customevents.integration.SaberFactionsHook;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -17,7 +19,6 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
-import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.Event;
@@ -39,13 +40,17 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Nexo {@link MechanicFactory} for the {@code base_claim_protector} mechanic.
  *
- * <p>Self-contained:
+ * <p>This implementation targets Nexo's <b>{@code custom_block}</b> mechanic
+ * (NOTEBLOCK variant). The protector is a real world block, not a furniture
+ * entity — so it's tracked by its block coordinates rather than an entity UUID.
+ *
  * <ul>
  *   <li>On placement: validates the player has a faction and the block sits
  *       in the centroid chunk of that faction's claims (reflection on
@@ -53,13 +58,14 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>While placed: polls for {@link Item} entities of the configured Nexo
  *       food on top of the block and consumes them. When a recipe's amount is
  *       fully reached, every wilderness chunk in {@code radius} is claimed
- *       for the placer's faction <strong>without checking power</strong>,
- *       and the bonus stays active for the recipe's {@code time}.</li>
+ *       for the placer's faction <b>without checking power</b>, and the bonus
+ *       stays active for the recipe's {@code time}.</li>
  *   <li>A {@link TextDisplay} hologram floats above the block during the
  *       active phase showing the remaining time (mm:ss / h:mm:ss).</li>
  *   <li>On expiry: releases the previously bonus-claimed chunks (only those),
- *       then either deletes the furniture (when {@code consume_on_expire})
- *       or swaps it to the configured depleted Nexo item to change texture.</li>
+ *       then either deletes the block (when {@code consume_on_expire}) or
+ *       swaps it to the configured depleted Nexo custom_block to mark "no
+ *       more food".</li>
  * </ul>
  */
 public class BaseClaimProtectorMechanicFactory extends MechanicFactory implements Listener {
@@ -69,11 +75,14 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
     private static BaseClaimProtectorMechanicFactory instance;
 
     private final JavaPlugin plugin;
-    private final Map<UUID, ActiveProtector> active = new ConcurrentHashMap<>();
-    /** Chunk-key (worldUid:cx:cz) → protector that owns the bonus claim there. */
-    private final Map<String, UUID> bonusChunkIndex = new ConcurrentHashMap<>();
+    /** Block-key (worldUid:x:y:z) → state. */
+    private final Map<String, ActiveProtector> active = new ConcurrentHashMap<>();
+    /** Chunk-key (worldUid:cx:cz) → block-key of the protector that owns the bonus claim. */
+    private final Map<String, String> bonusChunkIndex = new ConcurrentHashMap<>();
     /** Last chunk-key each player crossed into — debounces the title display. */
     private final Map<UUID, String> lastChunkKeyByPlayer = new ConcurrentHashMap<>();
+    /** Block-keys we are about to swap/remove — suppress our own break-event handling. */
+    private final Set<String> pendingSwap = ConcurrentHashMap.newKeySet();
     private BukkitTask feedTask;
 
     public BaseClaimProtectorMechanicFactory(JavaPlugin plugin) {
@@ -117,10 +126,15 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
         active.clear();
         bonusChunkIndex.clear();
         lastChunkKeyByPlayer.clear();
+        pendingSwap.clear();
     }
 
     private static String chunkKey(World world, int cx, int cz) {
         return world.getUID() + ":" + cx + ":" + cz;
+    }
+
+    private static String blockKey(Location loc) {
+        return loc.getWorld().getUID() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
     }
 
     // ─── Placement (LOWEST: bypass SaberFactions territorial protection) ───
@@ -140,7 +154,8 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
 
         Player player = event.getPlayer();
         BlockFace face = event.getBlockFace();
-        Location targetLoc = clicked.getRelative(face).getLocation();
+        Block targetBlock = clicked.getRelative(face);
+        Location targetLoc = targetBlock.getLocation();
 
         if (!SaberFactionsHook.isAvailable()) {
             event.setCancelled(true);
@@ -166,6 +181,12 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
             return;
         }
 
+        if (!targetBlock.getType().isAir()) {
+            event.setCancelled(true);
+            player.sendMessage("§c[Protecteur] Le bloc ciblé n'est pas vide.");
+            return;
+        }
+
         // Take control: cancel so SaberFactions / Nexo's regular flow don't process it.
         event.setCancelled(true);
         event.setUseItemInHand(Event.Result.DENY);
@@ -173,38 +194,40 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
         String itemId = NexoItems.idFromItem(item);
         if (itemId == null) return;
 
-        float yaw = player.getLocation().getYaw();
         Bukkit.getScheduler().runTask(plugin, () -> {
-            ItemDisplay placed = NexoFurniture.place(itemId, targetLoc, yaw, face);
-            if (placed == null) {
+            NexoBlocks.place(itemId, targetLoc);
+
+            // Verify the block was actually placed as the expected Nexo custom_block.
+            CustomBlockMechanic placed = NexoBlocks.customBlockMechanic(targetBlock);
+            if (placed == null || !itemId.equals(placed.getItemID())) {
                 player.sendMessage("§c[Protecteur] Échec de placement.");
                 return;
             }
+
             if (player.getGameMode() != GameMode.CREATIVE) {
                 ItemStack hand = player.getInventory().getItemInMainHand();
                 hand.setAmount(hand.getAmount() - 1);
             }
-            register(protector, placed, player, targetLoc, itemId);
+            register(protector, targetBlock, player, itemId);
             player.sendMessage("§a[Protecteur] Placé. Jette la nourriture Nexo sur le bloc pour activer le claim.");
             announceRecipes(protector, player);
         });
     }
 
     private void register(BaseClaimProtectorMechanic protector,
-                          ItemDisplay placed,
+                          Block block,
                           Player owner,
-                          Location at,
                           String activeNexoId) {
         Map<String, Integer> fed = new LinkedHashMap<>();
         for (String id : protector.recipes().keySet()) fed.put(id, 0);
         ActiveProtector ap = new ActiveProtector(
-                placed.getUniqueId(),
+                blockKey(block.getLocation()),
                 owner.getUniqueId(),
-                at.getBlock().getLocation(),
+                block.getLocation().clone(),
                 protector,
                 activeNexoId,
                 fed);
-        active.put(placed.getUniqueId(), ap);
+        active.put(ap.blockKey, ap);
     }
 
     private void announceRecipes(BaseClaimProtectorMechanic protector, Player to) {
@@ -219,13 +242,16 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
         }
     }
 
-    // ─── Cleanup on furniture break ────────────────────────────────────────
+    // ─── Cleanup on block break ────────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onFurnitureBreak(NexoFurnitureBreakEvent event) {
-        ItemDisplay base = event.getBaseEntity();
-        if (base == null) return;
-        ActiveProtector ap = active.remove(base.getUniqueId());
+    public void onBlockBreak(NexoBlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (block == null) return;
+        String key = blockKey(block.getLocation());
+        // Skip our own swap-induced break, if any.
+        if (pendingSwap.remove(key)) return;
+        ActiveProtector ap = active.remove(key);
         if (ap == null) return;
         // If broken while a bonus is active, release the bonus chunks to avoid
         // permanent free claims via "place + feed + break".
@@ -284,13 +310,20 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
     private void tickProtector(ActiveProtector ap, long nowMs) {
         World world = ap.location.getWorld();
         if (world == null) return;
-        Entity furn = Bukkit.getEntity(ap.entityId);
-        if (furn == null || !furn.isValid()) {
-            // The furniture was removed (chunk unload, /killall, etc.) without
-            // firing our break listener — drop state and bonus.
+        if (!world.isChunkLoaded(ap.location.getBlockX() >> 4, ap.location.getBlockZ() >> 4)) {
+            // Don't force-load — wait until someone is nearby.
+            return;
+        }
+
+        Block block = ap.location.getBlock();
+        CustomBlockMechanic mech = NexoBlocks.customBlockMechanic(block);
+        if (mech == null || !ap.activeNexoId.equals(mech.getItemID())) {
+            // The protector block was removed externally (explosion, replaced,
+            // /setblock, etc.) without firing our break listener — drop state
+            // and bonus.
             if (ap.activeUntilMs > 0) releaseBonusChunks(ap);
             removeHologram(ap);
-            active.remove(ap.entityId);
+            active.remove(ap.blockKey);
             return;
         }
 
@@ -375,7 +408,7 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
                 if (!SaberFactionsHook.isChunkWilderness(world, cx, cz)) continue;
                 if (SaberFactionsHook.setFactionAtChunk(owner, world, cx, cz)) {
                     ap.bonusChunks.add(new long[]{cx, cz});
-                    bonusChunkIndex.put(chunkKey(world, cx, cz), ap.entityId);
+                    bonusChunkIndex.put(chunkKey(world, cx, cz), ap.blockKey);
                 }
             }
         }
@@ -401,7 +434,7 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
     private void expire(ActiveProtector ap) {
         World world = ap.location.getWorld();
         if (world == null) {
-            active.remove(ap.entityId);
+            active.remove(ap.blockKey);
             return;
         }
 
@@ -417,40 +450,40 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
             owner.sendMessage("§e[Protecteur] §fLe bonus a expiré, les chunks ont été libérés.");
         }
 
+        Block block = ap.location.getBlock();
+
         if (ap.mechanic.consumeOnExpire()) {
-            Entity furn = Bukkit.getEntity(ap.entityId);
-            if (furn instanceof ItemDisplay base) {
-                try { NexoFurniture.remove(base, null); } catch (Throwable ignored) {}
-            }
-            active.remove(ap.entityId);
+            // Mark the upcoming break so we don't re-process our own removal.
+            pendingSwap.add(ap.blockKey);
+            block.setType(Material.AIR);
+            active.remove(ap.blockKey);
+            // Defensive cleanup — pendingSwap entry stays at most one tick.
+            Bukkit.getScheduler().runTask(plugin, () -> pendingSwap.remove(ap.blockKey));
             return;
         }
 
-        // Texture swap: replace the active furniture with the depleted variant
-        // so the block visually marks "no more food".
+        // Texture swap: replace the active block with the depleted custom_block
+        // so it visually marks "no more food".
         String depleted = ap.mechanic.depletedNexoId();
-        if (depleted == null || depleted.isBlank()) return;
-        Entity furn = Bukkit.getEntity(ap.entityId);
-        if (!(furn instanceof ItemDisplay base)) return;
+        if (depleted == null || depleted.isBlank()) {
+            // Leave the active block in place; just drop our state.
+            active.remove(ap.blockKey);
+            return;
+        }
 
-        Location placedAt = base.getLocation();
-        BlockFace face = guessFace(base);
-        float yaw = base.getLocation().getYaw();
-        try { NexoFurniture.remove(base, null); } catch (Throwable ignored) {}
+        pendingSwap.add(ap.blockKey);
+        block.setType(Material.AIR);
+        NexoBlocks.place(depleted, ap.location);
 
-        ItemDisplay swapped = NexoFurniture.place(depleted, placedAt, yaw, face);
-        active.remove(ap.entityId);
-        // We deliberately don't re-register: the depleted block has no mechanic.
-        // Owner can break it manually to remove the marker.
-        if (swapped == null && owner != null && owner.isOnline()) {
+        CustomBlockMechanic swapped = NexoBlocks.customBlockMechanic(ap.location.getBlock());
+        boolean ok = swapped != null && depleted.equals(swapped.getItemID());
+        active.remove(ap.blockKey);
+        Bukkit.getScheduler().runTask(plugin, () -> pendingSwap.remove(ap.blockKey));
+
+        if (!ok && owner != null && owner.isOnline()) {
             owner.sendMessage("§7[Protecteur] (échec du swap de texture — variante '" + depleted + "' manquante)");
         }
-    }
-
-    private BlockFace guessFace(ItemDisplay base) {
-        // Furniture placed via the click-on-top flow stores its facing in yaw/rotation;
-        // there's no clean way to recover the original BlockFace, so default UP.
-        return BlockFace.UP;
+        // We deliberately don't re-register: the depleted block has no mechanic.
     }
 
     private void releaseBonusChunks(ActiveProtector ap) {
@@ -515,8 +548,10 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
     // ─── State holder ──────────────────────────────────────────────────────
 
     private static final class ActiveProtector {
-        final UUID entityId;
+        /** Block-key (worldUid:x:y:z) — stable identifier of the protector block. */
+        final String blockKey;
         final UUID ownerId;
+        /** Block location (block-aligned, snapped to integer coords). */
         final Location location;
         final BaseClaimProtectorMechanic mechanic;
         final String activeNexoId;
@@ -529,13 +564,13 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
         /** TextDisplay hologram entity id — null while idle. */
         volatile UUID hologramId;
 
-        ActiveProtector(UUID entityId,
+        ActiveProtector(String blockKey,
                         UUID ownerId,
                         Location location,
                         BaseClaimProtectorMechanic mechanic,
                         String activeNexoId,
                         Map<String, Integer> fedAmount) {
-            this.entityId = entityId;
+            this.blockKey = blockKey;
             this.ownerId = ownerId;
             this.location = location;
             this.mechanic = mechanic;

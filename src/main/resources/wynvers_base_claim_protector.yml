@@ -34,11 +34,9 @@ base_claim_protector:
   itemname: "<gold>Protecteur de Base</gold>"
   material: PAPER
   Mechanics:
-    furniture:
-      type: ITEM_DISPLAY
-      hitbox:
-        height: 1.0
-        width: 1.0
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 476
     base_claim_protector:
       # Claim radius in chunks. radius: 3 -> 7x7 area = 49 chunks max.
       radius: 3
@@ -67,11 +65,9 @@ base_claim_protector_depleted:
   itemname: "<dark_gray>Protecteur de Base (épuisé)</dark_gray>"
   material: PAPER
   Mechanics:
-    furniture:
-      type: ITEM_DISPLAY
-      hitbox:
-        height: 1.0
-        width: 1.0
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 477
   Pack:
     parent_model: block/cube_all
     texture: fischvogel:fv_bettersnow/snow_depleted

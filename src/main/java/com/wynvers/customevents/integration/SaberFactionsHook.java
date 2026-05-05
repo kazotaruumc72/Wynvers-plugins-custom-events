@@ -90,7 +90,22 @@ public final class SaberFactionsHook {
             fPlayersGetByPlayer = fPlayersCls.getMethod("getByPlayer", Player.class);
             fPlayerGetFaction = fPlayerCls.getMethod("getFaction");
             factionIsWilderness = factionCls.getMethod("isWilderness");
-            factionGetRelationTo = factionCls.getMethod("getRelationTo", factionCls);
+
+            // getRelationTo signature varies between forks: Faction on classic
+            // MassiveCraft/FactionsUUID, RelationParticipator on most modern
+            // forks (SaberFactions, FactionsUUID 1.x+, FactionsX). Optional —
+            // only the enemy-entry title relies on it, so an absence must not
+            // disable the rest of the API.
+            factionGetRelationTo = tryMethod(factionCls, "getRelationTo", factionCls);
+            if (factionGetRelationTo == null) {
+                try {
+                    Class<?> rpCls = Class.forName("com.massivecraft.factions.iface.RelationParticipator");
+                    factionGetRelationTo = tryMethod(factionCls, "getRelationTo", rpCls);
+                } catch (ClassNotFoundException ignored) {}
+            }
+            if (factionGetRelationTo == null) {
+                LOG.warning("Faction.getRelationTo not found on this fork — enemy-entry title disabled.");
+            }
 
             // Optional methods (best-effort).
             factionIsSafeZone = tryMethod(factionCls, "isSafeZone");
@@ -172,6 +187,7 @@ public final class SaberFactionsHook {
     public static boolean isInEnemyClaim(Player player, Location location) {
         init();
         if (!available) return false;
+        if (factionGetRelationTo == null) return false;
         try {
             Object board = boardGetInstance.invoke(null);
             Object floc = fLocationBuilder.build(location);

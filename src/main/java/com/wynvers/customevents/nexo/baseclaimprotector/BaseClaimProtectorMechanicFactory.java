@@ -327,17 +327,16 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
             return;
         }
 
-        // Active phase — only update hologram + check expiry.
+        // Always scan for food — feeding during the active phase extends the
+        // remaining duration (more food = more time).
+        scanForFood(ap, world);
+
         if (ap.activeUntilMs > 0) {
             updateHologram(ap, nowMs);
             if (nowMs >= ap.activeUntilMs) {
                 expire(ap);
             }
-            return;
         }
-
-        // Charging phase — scan for thrown food on top.
-        scanForFood(ap, world);
     }
 
     private void scanForFood(ActiveProtector ap, World world) {
@@ -396,36 +395,54 @@ public class BaseClaimProtectorMechanicFactory extends MechanicFactory implement
         World world = ap.location.getWorld();
         if (world == null || owner == null || !owner.isOnline()) return;
 
-        int centerChunkX = ap.location.getBlockX() >> 4;
-        int centerChunkZ = ap.location.getBlockZ() >> 4;
-        int r = ap.mechanic.radius();
+        long nowMs = System.currentTimeMillis();
+        long durationMs = recipe.durationTicks * 50L;
+        boolean firstActivation = ap.activeUntilMs <= nowMs;
 
-        ap.bonusChunks.clear();
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dz = -r; dz <= r; dz++) {
-                int cx = centerChunkX + dx;
-                int cz = centerChunkZ + dz;
-                if (!SaberFactionsHook.isChunkWilderness(world, cx, cz)) continue;
-                if (SaberFactionsHook.setFactionAtChunk(owner, world, cx, cz)) {
-                    ap.bonusChunks.add(new long[]{cx, cz});
-                    bonusChunkIndex.put(chunkKey(world, cx, cz), ap.blockKey);
+        if (firstActivation) {
+            // Cover the rare edge case where expiry and re-feeding coincide
+            // on the same tick: drop any stale entries before re-claiming.
+            if (!ap.bonusChunks.isEmpty()) {
+                releaseBonusChunks(ap);
+            }
+
+            int centerChunkX = ap.location.getBlockX() >> 4;
+            int centerChunkZ = ap.location.getBlockZ() >> 4;
+            int r = ap.mechanic.radius();
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    int cx = centerChunkX + dx;
+                    int cz = centerChunkZ + dz;
+                    if (!SaberFactionsHook.isChunkWilderness(world, cx, cz)) continue;
+                    if (SaberFactionsHook.setFactionAtChunk(owner, world, cx, cz)) {
+                        ap.bonusChunks.add(new long[]{cx, cz});
+                        bonusChunkIndex.put(chunkKey(world, cx, cz), ap.blockKey);
+                    }
                 }
             }
+            ap.activeUntilMs = nowMs + durationMs;
+        } else {
+            // Already active — stack: each completed recipe adds its full
+            // duration on top of the remaining time.
+            ap.activeUntilMs += durationMs;
         }
 
-        long nowMs = System.currentTimeMillis();
-        ap.activeUntilMs = nowMs + recipe.durationTicks * 50L;
-        // Reset the fed counters so a second activation requires re-feeding.
+        // Reset fed counters so the next batch requires re-feeding.
         for (String id : ap.fedAmount.keySet()) ap.fedAmount.put(id, 0);
 
         Location feedPoint = ap.location.clone().add(0.5, 1.0, 0.5);
         world.playSound(feedPoint, ap.mechanic.claimSound(), 1.5f, 1.0f);
         world.spawnParticle(ap.mechanic.particle(), feedPoint, 60, 1.5, 1.5, 1.5, 0.05);
 
-        owner.sendMessage("§a§l[Protecteur] §a" + ap.bonusChunks.size()
-                + " chunk(s) revendiqués §7(" + formatDuration(recipe.durationTicks) + ")");
-
-        spawnHologram(ap, world);
+        if (firstActivation) {
+            owner.sendMessage("§a§l[Protecteur] §a" + ap.bonusChunks.size()
+                    + " chunk(s) revendiqués §7(" + formatDuration(recipe.durationTicks) + ")");
+            spawnHologram(ap, world);
+        } else {
+            long remainingTicks = Math.max(0, (ap.activeUntilMs - nowMs) / 50L);
+            owner.sendMessage("§a[Protecteur] §f+§a" + formatDuration(recipe.durationTicks)
+                    + " §7(restant: §f" + formatDuration(remainingTicks) + "§7)");
+        }
         updateHologram(ap, nowMs);
     }
 

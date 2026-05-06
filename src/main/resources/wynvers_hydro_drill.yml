@@ -5,23 +5,21 @@
 # 2. Run: /nexo reload
 #
 # USAGE:
-# - Give to a player: /give @p paper{NexoID:"hydro_siege_drill"}
+# - Give to a player: /give @p paper{NexoID:"hydro_drill_commun"}
 # - Place against an enemy claim wall.
-# - Wait 60s (incassable). At T=0, water in 7x7x7 disappears,
+# - Wait 60s (incassable). At T=0, water in the cube disappears,
 #   obsidian becomes cobblestone for 30s (TNT can break it).
 # - 60s cooldown per player.
 
-hydro_siege_drill:
-  itemname: "<gold>Foreuse d'Assèchement</gold>"
+hydro_drill_commun:
+  itemname: "<green>Foreuse d'Assèchement commun</green>"
   material: PAPER
   Mechanics:
-    furniture:
-      type: ITEM_FRAME
-      hitbox:
-        height: 1.0
-        width: 1.0
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 2
     hydro_drill:
-      radius: 3                  # 7x7x7 cube (radius 3 from center block)
+      radius: 1                  # 3x3x3 cube (radius 1 from center block)
       countdown_seconds: 60
       obsidian_swap_seconds: 30  # window where obsidian → cobblestone
       cooldown_seconds: 60
@@ -29,4 +27,4 @@ hydro_siege_drill:
       sound: BLOCK_BEACON_AMBIENT
   Pack:
     parent_model: block/cube_all
-    texture: fischvogel:fv_bettersnow/snow
+    texture: wynvers:blocks/hydro_drill_commun

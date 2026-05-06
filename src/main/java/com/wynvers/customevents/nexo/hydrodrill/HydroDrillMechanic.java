@@ -7,17 +7,17 @@ import org.bukkit.Sound;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
- * Real Nexo {@link Mechanic} for the Hydro-Siege Drill block.
+ * Real Nexo {@link Mechanic} for the Hydro-Siege Drill custom_block.
  *
  * <p>YAML example (top-level inside {@code Mechanics:}):
  * <pre>
- * hydro_siege_drill:
+ * hydro_drill_commun:
  *   Mechanics:
- *     furniture:
- *       type: ITEM_FRAME
- *       hitbox: { height: 1.0, width: 1.0 }
+ *     custom_block:
+ *       type: NOTEBLOCK
+ *       custom_variation: 2
  *     hydro_drill:
- *       radius: 3              # cube half-edge → 7x7x7 with radius 3
+ *       radius: 1              # cube half-edge → 3x3x3 with radius 1
  *       countdown_seconds: 60
  *       obsidian_swap_seconds: 30
  *       cooldown_seconds: 60

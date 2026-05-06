@@ -14,7 +14,7 @@ import java.util.UUID;
 /**
  * Holds runtime state for active Hydro-Siege Drills:
  * <ul>
- *   <li>Active drill entities → countdown task + placer.</li>
+ *   <li>Active drill blocks (keyed by {@code worldUid:x:y:z}) → countdown task + placer.</li>
  *   <li>Per-player cooldowns.</li>
  *   <li>Blocks swapped to cobblestone, scheduled for restoration to their
  *       original {@link BlockData} (preserves orientation, waterlogged, etc.).</li>
@@ -35,16 +35,17 @@ public class HydroDrillManager {
 
     public static final class BlockSwap {
         final long restoreAtMs;
-        final UUID drillId;
+        /** Block-key of the drill that owns this swap. */
+        final String drillKey;
         final BlockData originalData;
-        public BlockSwap(long restoreAtMs, UUID drillId, BlockData originalData) {
+        public BlockSwap(long restoreAtMs, String drillKey, BlockData originalData) {
             this.restoreAtMs = restoreAtMs;
-            this.drillId = drillId;
+            this.drillKey = drillKey;
             this.originalData = originalData;
         }
     }
 
-    private final Map<UUID, ActiveDrill> activeDrills = new HashMap<>();
+    private final Map<String, ActiveDrill> activeDrills = new HashMap<>();
     private final Map<UUID, Long> cooldowns = new HashMap<>();
     private final Map<Location, BlockSwap> blockSwaps = new HashMap<>();
 
@@ -69,16 +70,16 @@ public class HydroDrillManager {
         cooldowns.put(playerId, System.currentTimeMillis() + seconds * 1000L);
     }
 
-    public void registerDrill(UUID drillId, ActiveDrill drill) {
-        activeDrills.put(drillId, drill);
+    public void registerDrill(String drillKey, ActiveDrill drill) {
+        activeDrills.put(drillKey, drill);
     }
 
-    public boolean isActiveDrill(UUID entityId) {
-        return activeDrills.containsKey(entityId);
+    public boolean isActiveDrill(String drillKey) {
+        return activeDrills.containsKey(drillKey);
     }
 
-    public ActiveDrill removeDrill(UUID drillId) {
-        return activeDrills.remove(drillId);
+    public ActiveDrill removeDrill(String drillKey) {
+        return activeDrills.remove(drillKey);
     }
 
     public void registerBlockSwap(Location loc, BlockSwap swap) {

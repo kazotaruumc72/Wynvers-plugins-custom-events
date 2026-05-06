@@ -1,10 +1,11 @@
 package com.wynvers.customevents.nexo.hydrodrill;
 
-import com.nexomc.nexo.api.NexoFurniture;
+import com.nexomc.nexo.api.NexoBlocks;
 import com.nexomc.nexo.api.NexoItems;
-import com.nexomc.nexo.api.events.furniture.NexoFurnitureBreakEvent;
+import com.nexomc.nexo.api.events.custom_block.NexoBlockBreakEvent;
 import com.nexomc.nexo.mechanics.Mechanic;
 import com.nexomc.nexo.mechanics.MechanicFactory;
+import com.nexomc.nexo.mechanics.custom_block.CustomBlockMechanic;
 import com.wynvers.customevents.integration.SaberFactionsHook;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -13,7 +14,6 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
@@ -30,10 +30,15 @@ import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Nexo {@link MechanicFactory} for the {@code hydro_drill} mechanic.
+ *
+ * <p>Targets Nexo's <b>{@code custom_block}</b> mechanic (NOTEBLOCK variant):
+ * the drill is a real world block, not a furniture entity. State is keyed by
+ * block coordinates ({@code worldUid:x:y:z}) since blocks have no UUID.
  *
  * <p>Self-contained: parses items, listens to placement / break / explosion
  * events, runs the countdown task, applies the cube effect, restores obsidian.
@@ -46,6 +51,8 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
 
     private final JavaPlugin plugin;
     private final HydroDrillManager manager;
+    /** Block-keys we are about to remove ourselves — suppress the resulting break event. */
+    private final Set<String> pendingRemoval = ConcurrentHashMap.newKeySet();
 
     public HydroDrillMechanicFactory(JavaPlugin plugin) {
         super(MECHANIC_ID);
@@ -82,13 +89,17 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
         return mechanic;
     }
 
+    private static String blockKey(Location loc) {
+        return loc.getWorld().getUID() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
+    }
+
     // ─── Placement (manual flow) ───────────────────────────────────────────
     //
     // We listen at LOWEST so we run BEFORE SaberFactions' protection (which
     // typically runs at NORMAL/HIGH). When we detect a drill placement attempt
     // in an enemy claim, we cancel the event ourselves — preventing both
     // SaberFactions and Nexo's normal placement flow from processing it — and
-    // then place the furniture programmatically via NexoFurniture.place(),
+    // then place the custom_block programmatically via NexoBlocks.place(),
     // bypassing the territorial protection entirely.
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
@@ -106,7 +117,8 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
 
         Player player = event.getPlayer();
         BlockFace face = event.getBlockFace();
-        Location targetLoc = clicked.getRelative(face).getLocation();
+        Block targetBlock = clicked.getRelative(face);
+        Location targetLoc = targetBlock.getLocation();
 
         if (manager.isOnCooldown(player.getUniqueId())) {
             event.setCancelled(true);
@@ -122,6 +134,13 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
             return;
         }
 
+        Material targetType = targetBlock.getType();
+        if (!targetType.isAir() && targetType != Material.WATER && targetType != Material.BUBBLE_COLUMN) {
+            event.setCancelled(true);
+            player.sendMessage("§c[Foreuse] Le bloc ciblé n'est pas vide.");
+            return;
+        }
+
         // Take control: cancel the event so SaberFactions and Nexo's regular
         // placement flow don't process it, then place programmatically.
         event.setCancelled(true);
@@ -130,27 +149,30 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
         String itemId = NexoItems.idFromItem(item);
         if (itemId == null) return;
 
-        float yaw = player.getLocation().getYaw();
         Bukkit.getScheduler().runTask(plugin, () -> {
-            ItemDisplay placed = NexoFurniture.place(itemId, targetLoc, yaw, face);
-            if (placed == null) {
+            NexoBlocks.place(itemId, targetLoc);
+
+            CustomBlockMechanic placed = NexoBlocks.customBlockMechanic(targetBlock);
+            if (placed == null || !itemId.equals(placed.getItemID())) {
                 player.sendMessage("§c[Foreuse] Échec de placement.");
                 return;
             }
+
             if (player.getGameMode() != GameMode.CREATIVE) {
                 ItemStack hand = player.getInventory().getItemInMainHand();
                 hand.setAmount(hand.getAmount() - 1);
             }
             manager.setCooldown(player.getUniqueId(), drill.cooldownSeconds());
-            startCountdown(drill, placed, player, targetLoc);
+            startCountdown(drill, targetBlock, player, itemId);
         });
     }
 
     private void startCountdown(HydroDrillMechanic drill,
-                                ItemDisplay drillEntity,
+                                Block drillBlock,
                                 Player placer,
-                                Location center) {
-        UUID drillId = drillEntity.getUniqueId();
+                                String drillNexoId) {
+        String drillKey = blockKey(drillBlock.getLocation());
+        Location center = drillBlock.getLocation();
         int totalSeconds = drill.countdownSeconds();
 
         BukkitTask task = new BukkitRunnable() {
@@ -158,9 +180,11 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
 
             @Override
             public void run() {
-                if (!drillEntity.isValid()) {
+                CustomBlockMechanic mech = NexoBlocks.customBlockMechanic(center.getBlock());
+                if (mech == null || !drillNexoId.equals(mech.getItemID())) {
+                    // Block was removed externally — stop countdown.
                     cancel();
-                    manager.removeDrill(drillId);
+                    manager.removeDrill(drillKey);
                     return;
                 }
 
@@ -171,9 +195,11 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
                 }
 
                 if (elapsed >= totalSeconds) {
-                    triggerExplosion(drill, center, drillId);
-                    NexoFurniture.remove(drillEntity, null);
-                    manager.removeDrill(drillId);
+                    triggerExplosion(drill, center, drillKey);
+                    pendingRemoval.add(drillKey);
+                    center.getBlock().setType(Material.AIR, false);
+                    Bukkit.getScheduler().runTask(plugin, () -> pendingRemoval.remove(drillKey));
+                    manager.removeDrill(drillKey);
                     cancel();
                     return;
                 }
@@ -181,7 +207,7 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
             }
         }.runTaskTimer(plugin, 0L, 20L);
 
-        manager.registerDrill(drillId, new HydroDrillManager.ActiveDrill(placer.getUniqueId(), task));
+        manager.registerDrill(drillKey, new HydroDrillManager.ActiveDrill(placer.getUniqueId(), task));
     }
 
     private void playCountdownEffects(HydroDrillMechanic drill, Location center, int remaining) {
@@ -199,7 +225,7 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
 
     // ─── Explosion (T = 0) ─────────────────────────────────────────────────
 
-    private void triggerExplosion(HydroDrillMechanic drill, Location center, UUID drillId) {
+    private void triggerExplosion(HydroDrillMechanic drill, Location center, String drillKey) {
         int r = drill.radius();
         long restoreAtMs = System.currentTimeMillis() + drill.obsidianSwapSeconds() * 1000L;
 
@@ -213,13 +239,15 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
                         b.setType(Material.AIR, false);
                         continue;
                     }
+                    // Don't cobble the drill block itself (it's about to be removed).
+                    if (blockKey(b.getLocation()).equals(drillKey)) continue;
                     // Skip blocks already swapped (overlapping drills).
                     if (manager.isSwappedBlock(b.getLocation())) continue;
 
                     org.bukkit.block.data.BlockData original = b.getBlockData().clone();
                     b.setType(Material.COBBLESTONE, false);
                     manager.registerBlockSwap(b.getLocation(),
-                            new HydroDrillManager.BlockSwap(restoreAtMs, drillId, original));
+                            new HydroDrillManager.BlockSwap(restoreAtMs, drillKey, original));
                 }
             }
         }
@@ -236,10 +264,13 @@ public class HydroDrillMechanicFactory extends MechanicFactory implements Listen
     // ─── Break protection during countdown ─────────────────────────────────
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onFurnitureBreak(NexoFurnitureBreakEvent event) {
-        ItemDisplay base = event.getBaseEntity();
-        if (base == null) return;
-        if (!manager.isActiveDrill(base.getUniqueId())) return;
+    public void onBlockBreak(NexoBlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (block == null) return;
+        String key = blockKey(block.getLocation());
+        // Skip our own self-removal at T=0.
+        if (pendingRemoval.remove(key)) return;
+        if (!manager.isActiveDrill(key)) return;
         event.setCancelled(true);
         Player breaker = event.getPlayer();
         if (breaker != null) {

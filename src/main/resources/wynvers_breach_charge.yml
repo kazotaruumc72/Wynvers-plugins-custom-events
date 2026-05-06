@@ -8,22 +8,20 @@
 # - Charge: /give @p paper{NexoID:"breach_charge"}
 #   Right-click on a wall side (NORTH/SOUTH/EAST/WEST) to plant.
 #   10s countdown, then digs a 3x3x4 tunnel into the wall.
-#   Defenders see a faction alert + can break the furniture or use a Defuser.
+#   Defenders see a faction alert + can break the block or use a Defuser.
 #   Disabled in SafeZone / WarZone. 5min cooldown per player.
 #
 # - Defuser: /give @p paper{NexoID:"breach_defuser"}
-#   Right-click an active Breach Charge with this item to defuse it.
+#   Right-click an active Breach Charge block with this item to defuse it.
 #   Consumed on use by default.
 
 breach_charge:
   itemname: "<red>Charge de Brèche</red>"
   material: PAPER
   Mechanics:
-    furniture:
-      type: ITEM_FRAME
-      hitbox:
-        height: 1.0
-        width: 1.0
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 2
     breach_charge:
       countdown_seconds: 10
       critical_threshold_seconds: 3

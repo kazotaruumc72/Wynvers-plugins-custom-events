@@ -10,22 +10,29 @@ import java.util.UUID;
 
 /**
  * Holds runtime state for active Breach Charges and per-player cooldowns.
+ *
+ * <p>Charges are keyed by block coordinates ({@code worldUid:x:y:z}) since the
+ * charge is a Nexo {@code custom_block} (NOTEBLOCK variant), not a furniture
+ * entity, and therefore has no UUID.
  */
 public class BreachChargeManager {
 
     public static final class ActiveCharge {
         public final UUID placerId;
-        public final Location wallBlock;       // the wall block the charge is attached to
-        public final BlockFace tunnelDirection; // direction the tunnel digs into
+        public final Location chargeBlock;       // the placed custom_block location
+        public final Location wallBlock;         // wall the charge is attached to
+        public final BlockFace tunnelDirection;  // direction the tunnel digs into
         public final BreachChargeMechanic mechanic;
         public final BukkitTask countdownTask;
 
         public ActiveCharge(UUID placerId,
+                            Location chargeBlock,
                             Location wallBlock,
                             BlockFace tunnelDirection,
                             BreachChargeMechanic mechanic,
                             BukkitTask countdownTask) {
             this.placerId = placerId;
+            this.chargeBlock = chargeBlock;
             this.wallBlock = wallBlock;
             this.tunnelDirection = tunnelDirection;
             this.mechanic = mechanic;
@@ -33,7 +40,7 @@ public class BreachChargeManager {
         }
     }
 
-    private final Map<UUID, ActiveCharge> activeCharges = new HashMap<>();
+    private final Map<String, ActiveCharge> activeCharges = new HashMap<>();
     private final Map<UUID, Long> cooldowns = new HashMap<>();
 
     public boolean isOnCooldown(UUID playerId) {
@@ -56,20 +63,20 @@ public class BreachChargeManager {
         cooldowns.put(playerId, System.currentTimeMillis() + seconds * 1000L);
     }
 
-    public void register(UUID drillId, ActiveCharge charge) {
-        activeCharges.put(drillId, charge);
+    public void register(String chargeKey, ActiveCharge charge) {
+        activeCharges.put(chargeKey, charge);
     }
 
-    public ActiveCharge get(UUID entityId) {
-        return activeCharges.get(entityId);
+    public ActiveCharge get(String chargeKey) {
+        return activeCharges.get(chargeKey);
     }
 
-    public boolean isActive(UUID entityId) {
-        return activeCharges.containsKey(entityId);
+    public boolean isActive(String chargeKey) {
+        return activeCharges.containsKey(chargeKey);
     }
 
-    public ActiveCharge remove(UUID entityId) {
-        return activeCharges.remove(entityId);
+    public ActiveCharge remove(String chargeKey) {
+        return activeCharges.remove(chargeKey);
     }
 
     public void shutdown() {

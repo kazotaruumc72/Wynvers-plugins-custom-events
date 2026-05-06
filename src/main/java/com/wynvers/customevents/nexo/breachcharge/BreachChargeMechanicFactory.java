@@ -1,10 +1,11 @@
 package com.wynvers.customevents.nexo.breachcharge;
 
-import com.nexomc.nexo.api.NexoFurniture;
+import com.nexomc.nexo.api.NexoBlocks;
 import com.nexomc.nexo.api.NexoItems;
-import com.nexomc.nexo.api.events.furniture.NexoFurnitureBreakEvent;
+import com.nexomc.nexo.api.events.custom_block.NexoBlockBreakEvent;
 import com.nexomc.nexo.mechanics.Mechanic;
 import com.nexomc.nexo.mechanics.MechanicFactory;
+import com.nexomc.nexo.mechanics.custom_block.CustomBlockMechanic;
 import com.wynvers.customevents.integration.SaberFactionsHook;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -16,7 +17,6 @@ import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
@@ -33,14 +33,19 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
-import java.util.UUID;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Nexo {@link MechanicFactory} for the {@code breach_charge} mechanic.
  *
+ * <p>Targets Nexo's <b>{@code custom_block}</b> mechanic (NOTEBLOCK variant):
+ * the charge is a real world block, not a furniture entity. State is keyed by
+ * block coordinates ({@code worldUid:x:y:z}) since blocks have no UUID.
+ *
  * <p>Self-contained: parses items, handles wall placement (with SaberFactions
- * bypass via manual NexoFurniture.place), runs the countdown, plays bips and
- * particles (orange → red in the critical phase), defuses on furniture break,
+ * bypass via manual NexoBlocks.place), runs the countdown, plays bips and
+ * particles (orange → red in the critical phase), defuses on block break,
  * and dynamites a directional tunnel at T=0.
  */
 public class BreachChargeMechanicFactory extends MechanicFactory implements Listener {
@@ -51,6 +56,8 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
 
     private final JavaPlugin plugin;
     private final BreachChargeManager manager;
+    /** Block-keys we are about to remove ourselves — suppress the resulting break event. */
+    private final Set<String> pendingRemoval = ConcurrentHashMap.newKeySet();
 
     public BreachChargeMechanicFactory(JavaPlugin plugin) {
         super(MECHANIC_ID);
@@ -82,6 +89,10 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
         return mechanic;
     }
 
+    public static String blockKey(Location loc) {
+        return loc.getWorld().getUID() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
+    }
+
     // ─── Placement (LOWEST: bypass SaberFactions territorial protection) ───
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
@@ -107,7 +118,8 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
             return;
         }
 
-        Location targetLoc = clicked.getRelative(face).getLocation();
+        Block targetBlock = clicked.getRelative(face);
+        Location targetLoc = targetBlock.getLocation();
 
         if (manager.isOnCooldown(player.getUniqueId())) {
             event.setCancelled(true);
@@ -122,6 +134,13 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
             return;
         }
 
+        Material targetType = targetBlock.getType();
+        if (!targetType.isAir() && targetType != Material.WATER) {
+            event.setCancelled(true);
+            player.sendMessage("§c[Charge] L'emplacement est obstrué.");
+            return;
+        }
+
         // Take control: cancel so SaberFactions / Nexo's regular flow don't process it.
         event.setCancelled(true);
         event.setUseItemInHand(Event.Result.DENY);
@@ -129,25 +148,24 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
         String itemId = NexoItems.idFromItem(item);
         if (itemId == null) return;
 
-        float yaw = player.getLocation().getYaw();
         Bukkit.getScheduler().runTask(plugin, () -> {
-            ItemDisplay placed = NexoFurniture.place(itemId, targetLoc, yaw, face);
-            if (placed == null) {
+            NexoBlocks.place(itemId, targetLoc);
+
+            CustomBlockMechanic placed = NexoBlocks.customBlockMechanic(targetBlock);
+            if (placed == null || !itemId.equals(placed.getItemID())) {
                 player.sendMessage("§c[Charge] Échec de placement.");
                 return;
             }
+
             if (player.getGameMode() != GameMode.CREATIVE) {
                 ItemStack hand = player.getInventory().getItemInMainHand();
                 hand.setAmount(hand.getAmount() - 1);
             }
             manager.setCooldown(player.getUniqueId(), charge.cooldownSeconds());
 
-            // The wall block this charge is attached to:
-            Block wallBlock = clicked;
             BlockFace tunnelDirection = face.getOppositeFace(); // into the wall
-
-            startCountdown(charge, placed, player, wallBlock, tunnelDirection);
-            alertFaction(charge, player, wallBlock.getLocation());
+            startCountdown(charge, targetBlock, clicked, player, tunnelDirection, itemId);
+            alertFaction(charge, player, clicked.getLocation());
         });
     }
 
@@ -167,43 +185,46 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
     // ─── Countdown ──────────────────────────────────────────────────────────
 
     private void startCountdown(BreachChargeMechanic charge,
-                                ItemDisplay drillEntity,
-                                Player placer,
+                                Block chargeBlock,
                                 Block wallBlock,
-                                BlockFace tunnelDirection) {
-        UUID drillId = drillEntity.getUniqueId();
+                                Player placer,
+                                BlockFace tunnelDirection,
+                                String chargeNexoId) {
+        String chargeKey = blockKey(chargeBlock.getLocation());
         int totalSeconds = charge.countdownSeconds();
         int criticalThreshold = charge.criticalThresholdSeconds();
-        Location chargeLoc = drillEntity.getLocation();
+        Location chargeCenter = chargeBlock.getLocation().clone().add(0.5, 0.5, 0.5);
 
         BukkitTask task = new BukkitRunnable() {
             int elapsed = 0;
 
             @Override
             public void run() {
-                if (!drillEntity.isValid()) {
+                CustomBlockMechanic mech = NexoBlocks.customBlockMechanic(chargeBlock);
+                if (mech == null || !chargeNexoId.equals(mech.getItemID())) {
+                    // Block was removed externally — stop countdown.
                     cancel();
-                    manager.remove(drillId);
+                    manager.remove(chargeKey);
                     return;
                 }
                 int remaining = totalSeconds - elapsed;
 
                 if (remaining <= criticalThreshold) {
                     // Critical phase: red dust, fast bips.
-                    chargeLoc.getWorld().spawnParticle(Particle.DUST, chargeLoc, 20,
+                    chargeCenter.getWorld().spawnParticle(Particle.DUST, chargeCenter, 20,
                             0.4, 0.4, 0.4, 0,
                             new Particle.DustOptions(Color.fromRGB(180, 0, 0), 1.6f));
-                    chargeLoc.getWorld().playSound(chargeLoc, Sound.BLOCK_NOTE_BLOCK_PLING, 1.5f, 2.0f);
-                    chargeLoc.getWorld().playSound(chargeLoc, Sound.BLOCK_NOTE_BLOCK_PLING, 1.5f, 2.0f);
+                    chargeCenter.getWorld().playSound(chargeCenter, Sound.BLOCK_NOTE_BLOCK_PLING, 1.5f, 2.0f);
+                    chargeCenter.getWorld().playSound(chargeCenter, Sound.BLOCK_NOTE_BLOCK_PLING, 1.5f, 2.0f);
                 } else {
                     // Normal phase: orange flames, slow bip.
-                    chargeLoc.getWorld().spawnParticle(Particle.FLAME, chargeLoc, 12,
+                    chargeCenter.getWorld().spawnParticle(Particle.FLAME, chargeCenter, 12,
                             0.3, 0.3, 0.3, 0.01);
-                    chargeLoc.getWorld().playSound(chargeLoc, Sound.BLOCK_NOTE_BLOCK_HAT, 1.0f, 1.4f);
+                    chargeCenter.getWorld().playSound(chargeCenter, Sound.BLOCK_NOTE_BLOCK_HAT, 1.0f, 1.4f);
                 }
 
                 if (elapsed >= totalSeconds) {
-                    detonate(charge, drillEntity, wallBlock, tunnelDirection, drillId);
+                    detonate(charge, chargeBlock, wallBlock, tunnelDirection, chargeKey);
                     cancel();
                     return;
                 }
@@ -211,20 +232,29 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
             }
         }.runTaskTimer(plugin, 0L, 20L);
 
-        manager.register(drillId, new BreachChargeManager.ActiveCharge(
-                placer.getUniqueId(), wallBlock.getLocation(), tunnelDirection, charge, task));
+        manager.register(chargeKey, new BreachChargeManager.ActiveCharge(
+                placer.getUniqueId(),
+                chargeBlock.getLocation(),
+                wallBlock.getLocation(),
+                tunnelDirection,
+                charge,
+                task));
     }
 
     // ─── Detonation ─────────────────────────────────────────────────────────
 
     private void detonate(BreachChargeMechanic charge,
-                          ItemDisplay drillEntity,
+                          Block chargeBlock,
                           Block wallBlock,
                           BlockFace tunnelDirection,
-                          UUID drillId) {
-        Location at = drillEntity.getLocation();
-        try { NexoFurniture.remove(drillEntity, null); } catch (Throwable ignored) {}
-        manager.remove(drillId);
+                          String chargeKey) {
+        Location at = chargeBlock.getLocation().clone().add(0.5, 0.5, 0.5);
+        manager.remove(chargeKey);
+
+        // Self-remove the charge block silently.
+        pendingRemoval.add(chargeKey);
+        chargeBlock.setType(Material.AIR, false);
+        Bukkit.getScheduler().runTask(plugin, () -> pendingRemoval.remove(chargeKey));
 
         if (at.getWorld() == null) return;
 
@@ -255,36 +285,44 @@ public class BreachChargeMechanicFactory extends MechanicFactory implements List
         }
     }
 
-    // ─── Defuse on furniture break (defender or water) ─────────────────────
+    // ─── Defuse on block break (defender, water, explosion) ───────────────
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onFurnitureBreak(NexoFurnitureBreakEvent event) {
-        ItemDisplay base = event.getBaseEntity();
-        if (base == null) return;
-        if (!manager.isActive(base.getUniqueId())) return;
-        defuse(base.getUniqueId(), event.getPlayer());
-        // Let Nexo handle the entity removal (don't cancel).
+    public void onBlockBreak(NexoBlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (block == null) return;
+        String key = blockKey(block.getLocation());
+        // Skip our own self-removal at T=0.
+        if (pendingRemoval.remove(key)) return;
+        if (!manager.isActive(key)) return;
+        // Block is being broken naturally — let Nexo handle removal, only clean up state.
+        defuse(key, event.getPlayer(), false);
     }
 
     /**
-     * Cancels the countdown for the given charge, removes the visual furniture,
-     * and notifies the defuser (if any).
+     * Cancels the countdown for the given charge and notifies the defuser.
+     * When {@code removeBlock} is true, also removes the visual block (used by
+     * the Defuser tool); when false, the caller is already handling block
+     * removal (e.g. the {@link NexoBlockBreakEvent} flow).
      */
-    public void defuse(UUID entityId, Player defuser) {
-        BreachChargeManager.ActiveCharge active = manager.remove(entityId);
+    public void defuse(String chargeKey, Player defuser, boolean removeBlock) {
+        BreachChargeManager.ActiveCharge active = manager.remove(chargeKey);
         if (active == null) return;
         try { active.countdownTask.cancel(); } catch (Throwable ignored) {}
 
-        // Remove the visual furniture so the wall is clear.
-        org.bukkit.entity.Entity entity = Bukkit.getEntity(entityId);
-        if (entity instanceof ItemDisplay base) {
-            try { NexoFurniture.remove(base, null); } catch (Throwable ignored) {}
-        }
-
-        Location at = active.wallBlock;
-        if (at != null && at.getWorld() != null) {
-            at.getWorld().playSound(at, Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 1.0f);
-            at.getWorld().spawnParticle(Particle.SMOKE, at.clone().add(0.5, 0.5, 0.5),
+        Location loc = active.chargeBlock;
+        if (loc != null && loc.getWorld() != null) {
+            if (removeBlock) {
+                Block b = loc.getBlock();
+                CustomBlockMechanic mech = NexoBlocks.customBlockMechanic(b);
+                if (mech != null) {
+                    pendingRemoval.add(chargeKey);
+                    b.setType(Material.AIR, false);
+                    Bukkit.getScheduler().runTask(plugin, () -> pendingRemoval.remove(chargeKey));
+                }
+            }
+            loc.getWorld().playSound(loc, Sound.BLOCK_FIRE_EXTINGUISH, 1.5f, 1.0f);
+            loc.getWorld().spawnParticle(Particle.SMOKE, loc.clone().add(0.5, 0.5, 0.5),
                     20, 0.4, 0.4, 0.4, 0.02);
         }
         if (defuser != null) {

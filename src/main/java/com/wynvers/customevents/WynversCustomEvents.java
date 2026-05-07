@@ -19,6 +19,8 @@ import com.wynvers.customevents.nexo.explosionreducer.ExplosionReducerMechanicFa
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.runeshop.ShopRuneMechanicFactory;
+import com.wynvers.customevents.nexo.slipthrough.SlipThroughListener;
+import com.wynvers.customevents.nexo.slipthrough.SlipThroughLoader;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
 import com.wynvers.customevents.papi.WcePlaceholderExpansion;
@@ -61,6 +63,8 @@ public class WynversCustomEvents extends JavaPlugin {
     private FarmerEventListener farmerListener;
     private HarvesterEventListener harvesterListener;
     private TeleporterSetupManager teleporterSetupManager;
+    private SlipThroughLoader slipThroughLoader;
+    private SlipThroughListener slipThroughListener;
 
     @Override
     public void onLoad() {
@@ -220,6 +224,14 @@ public class WynversCustomEvents extends JavaPlugin {
             Bukkit.getPluginManager().registerEvents(
                     new TeleporterInputListener(this, teleporterSetupManager), this);
             getLogger().info("Teleporter mechanic enabled.");
+
+            // Slip-through custom_block flag (e.g. fv_aether_leaves):
+            // items dropped on the block fall through instead of resting on top.
+            slipThroughLoader = new SlipThroughLoader(this);
+            slipThroughLoader.reload(resolveNexoItemsDir());
+            slipThroughListener = new SlipThroughListener(this, slipThroughLoader);
+            Bukkit.getPluginManager().registerEvents(slipThroughListener, this);
+            getLogger().info("Slip-through block scanner enabled.");
         } else {
             getLogger().warning("Nexo not found - 'giveItem NexoItems:' actions will be skipped.");
         }
@@ -282,6 +294,9 @@ public class WynversCustomEvents extends JavaPlugin {
         if (BaseClaimProtectorMechanicFactory.instance() != null) {
             BaseClaimProtectorMechanicFactory.instance().shutdown();
         }
+        if (slipThroughListener != null) {
+            slipThroughListener.shutdown();
+        }
         getLogger().info("WynversCustomEvents disabled.");
     }
 
@@ -322,6 +337,10 @@ public class WynversCustomEvents extends JavaPlugin {
         if (nexoWitherLoader != null) {
             nexoWitherLoader.reload(resolveNexoItemsDir());
             getLogger().info("Nexo wither_properties reloaded.");
+        }
+        if (slipThroughLoader != null) {
+            slipThroughLoader.reload(resolveNexoItemsDir());
+            getLogger().info("Slip-through registry reloaded.");
         }
     }
 

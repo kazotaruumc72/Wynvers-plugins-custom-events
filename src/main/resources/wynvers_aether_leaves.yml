@@ -1,0 +1,36 @@
+# Wynvers Custom Events - Aether Leaves (slip-through block)
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Run: /nexo reload  (and /wcereload to refresh the slip-through registry)
+#
+# The custom_block.to_slip_through.enable=true flag is read by
+# WynversCustomEvents (SlipThroughLoader) — items dropped on the block are
+# teleported underneath so they slip through naturally.
+
+fv_aether_leaves:
+  itemname: Aether Leaves
+  material: PAPER
+  Pack:
+    parent_model: block/cube_all
+    texture: fischvogel:fv_aether/aether_leaves.png
+  Mechanics:
+    custom_block:
+      type: CHORUSBLOCK
+      custom_variation: 4 # ##DO NOT CHANGE THAT FOR TREE GROWING
+      drop:
+        best_tool: SHEARS
+        silktouch: true
+        loots:
+          - nexo_item: fv_aether_leaves
+            probability: 0.8
+          - crucible_item: fv_aether_sapling
+            probability: 0.075
+      block_sounds:
+        place_sound: block.cherry_leaves.place
+        break_sound: block.cherry_leaves.break
+        hit_sound: block.cherry_leaves.hit
+        step_sound: block.cherry_leaves.step
+        fall_sound: block.cherry_leaves.fall
+      to_slip_through:
+        enable: true

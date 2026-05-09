@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.wynvers</groupId>
-    <artifactId>WynversCustomEvents</artifactId>
+    <artifactId>WCE</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
-    <name>WynversCustomEvents</name>
-    <description>OreStack addon providing custom events and Nexo item support via giveItem NexoItems:&lt;id&gt;</description>
+    <name>WCE</name>
+    <description>Plugins addon providing custom events and Nexo item support via giveItem NexoItems:&lt;id&gt;</description>
 
     <properties>
         <maven.compiler.source>16</maven.compiler.source>

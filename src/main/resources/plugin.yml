@@ -23,8 +23,15 @@ commands:
     usage: /wcereload
     permission: wynverscustomevents.reload
     permission-message: You do not have permission to reload WynversCustomEvents.
+  wce:
+    description: WynversCustomEvents main command
+    usage: /wce <subcommand>
+    aliases: [wce]
 
 permissions:
   wynverscustomevents.reload:
     description: Allows reloading the WynversCustomEvents configuration
+    default: op
+  wynverscustomevents.checkvar:
+    description: Allows checking custom variation usage with /wce checkvar
     default: op

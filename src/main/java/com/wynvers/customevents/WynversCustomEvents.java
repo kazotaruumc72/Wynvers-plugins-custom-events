@@ -7,6 +7,7 @@ import com.wynvers.customevents.listener.SeedPlantListener;
 import com.wynvers.customevents.listener.HarvesterEventListener;
 import com.wynvers.customevents.listener.HarvestingToolListener;
 import com.wynvers.customevents.listener.TeleporterInputListener;
+import com.wynvers.customevents.nexo.CustomVariationAnalyzer;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
@@ -312,16 +313,39 @@ public class WynversCustomEvents extends JavaPlugin {
                              @NotNull Command command,
                              @NotNull String label,
                              @NotNull String[] args) {
-        if (!command.getName().equalsIgnoreCase("wcereload")) {
-            return false;
-        }
-        if (!sender.hasPermission("wynverscustomevents.reload")) {
-            sender.sendMessage("§cYou do not have permission to run this command.");
+        String cmdName = command.getName().toLowerCase();
+
+        if (cmdName.equals("wcereload")) {
+            if (!sender.hasPermission("wynverscustomevents.reload")) {
+                sender.sendMessage("§cYou do not have permission to run this command.");
+                return true;
+            }
+            reloadActionsConfig();
+            sender.sendMessage("§aWynversCustomEvents configuration reloaded.");
             return true;
         }
-        reloadActionsConfig();
-        sender.sendMessage("§aWynversCustomEvents configuration reloaded.");
-        return true;
+
+        if (cmdName.equals("wce")) {
+            if (args.length == 0) {
+                sender.sendMessage("§cUsage: /wce <subcommand>");
+                sender.sendMessage("§7Subcommands: checkvar");
+                return true;
+            }
+
+            String subcommand = args[0].toLowerCase();
+            if (subcommand.equals("checkvar")) {
+                if (!sender.hasPermission("wynverscustomevents.checkvar")) {
+                    sender.sendMessage("§cYou do not have permission to run this command.");
+                    return true;
+                }
+                executeCheckVar(sender);
+                return true;
+            }
+
+            return false;
+        }
+
+        return false;
     }
 
     /**
@@ -344,6 +368,69 @@ public class WynversCustomEvents extends JavaPlugin {
         }
     }
 
+
+    /**
+     * Executes the /wce checkvar command to analyze custom_variation usage.
+     */
+    private void executeCheckVar(CommandSender sender) {
+        if (Bukkit.getPluginManager().getPlugin("Nexo") == null) {
+            sender.sendMessage("§cNexo is not installed.");
+            return;
+        }
+
+        sender.sendMessage("§6Analyzing custom_variation usage...");
+
+        CustomVariationAnalyzer analyzer = new CustomVariationAnalyzer(this);
+        CustomVariationAnalyzer.VariationAnalysisResult result = analyzer.analyzeVariations(resolveNexoItemsDir());
+
+        if (result.hasError()) {
+            sender.sendMessage("§c" + result.error);
+            return;
+        }
+
+        // Display duplicates
+        if (!result.duplicates.isEmpty()) {
+            sender.sendMessage("§c⚠ DUPLICATES FOUND:");
+            result.duplicates.forEach((variation, items) -> {
+                sender.sendMessage("  §7Variation " + variation + ": §c" + String.join("§7, §c", items));
+            });
+        } else {
+            sender.sendMessage("§a✓ No duplicates found.");
+        }
+
+        sender.sendMessage("");
+
+        // Display free variations (up to 20 to avoid spam)
+        if (!result.freeVariations.isEmpty()) {
+            int count = result.freeVariations.size();
+            sender.sendMessage("§6Free variations: §a" + count + " available");
+
+            // Show first 20 free variations
+            int shown = 0;
+            StringBuilder freeVars = new StringBuilder("  ");
+            for (Integer var : result.freeVariations) {
+                if (shown >= 20) {
+                    sender.sendMessage(freeVars.toString());
+                    freeVars = new StringBuilder("  ");
+                    shown = 0;
+                }
+                if (shown > 0) freeVars.append("§7, ");
+                freeVars.append("§a").append(var);
+                shown++;
+            }
+            if (shown > 0) {
+                sender.sendMessage(freeVars.toString());
+            }
+            if (count > 20) {
+                sender.sendMessage("  §7... and " + (count - 20) + " more");
+            }
+        } else {
+            sender.sendMessage("§c✗ No free variations available!");
+        }
+
+        sender.sendMessage("");
+        sender.sendMessage("§6Total used: §a" + result.usedVariations.size() + "§6, Free: §a" + result.freeVariations.size());
+    }
 
     /**
      * Resolves the Nexo items directory.

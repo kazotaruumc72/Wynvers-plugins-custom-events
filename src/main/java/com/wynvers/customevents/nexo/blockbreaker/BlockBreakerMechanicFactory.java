@@ -54,14 +54,6 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
     private final JavaPlugin plugin;
     private final BlockBreakerManager manager;
     private final BlockBreakerStore store;
-    /**
-     * Block-key → Fortune tier of the currently-active break call. Populated
-     * just before {@link NexoBlocks#remove(Location, Player)} so that the
-     * {@code ItemSpawnEvent} listener can recognise items dropped by
-     * RoseLoot during this very break and inflate their stack-size.
-     */
-    private final java.util.Map<String, Integer> pendingFortune =
-            new java.util.concurrent.ConcurrentHashMap<>();
 
     public BlockBreakerMechanicFactory(JavaPlugin plugin) {
         super(MECHANIC_ID);
@@ -316,19 +308,37 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
             boolean removed;
             try {
                 removed = NexoBlocks.remove(targetLoc, owner);
-                if (removed && extraRolls > 0 && brokenNexoId != null) {
-                    for (int i = 0; i < extraRolls; i++) {
-                        // Re-instate the Nexo block over whatever RoseLoot
-                        // replaced it with (typically bedrock), then break it
-                        // again. Each iteration triggers a fresh loot pass.
-                        NexoBlocks.place(brokenNexoId, targetLoc);
-                        NexoBlocks.remove(targetLoc, owner);
-                    }
-                }
             } finally {
                 inv.setItemInMainHand(originalMainHand);
             }
             if (!removed) return false;
+
+            // Schedule the extra Fortune rolls one tick apart so each drop
+            // arrives as its own Item entity (rather than stacking into one).
+            //   Tick 0  → original drop
+            //   Tick +1 → first extra roll
+            //   Tick +2 → second extra roll … etc.
+            // Player must still be online when each tick fires; otherwise the
+            // remaining rolls are silently skipped.
+            if (extraRolls > 0 && brokenNexoId != null) {
+                final UUID ownerId = owner.getUniqueId();
+                final BlockBreakerManager.State stateRef = s;
+                for (int i = 1; i <= extraRolls; i++) {
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        Player p = Bukkit.getPlayer(ownerId);
+                        if (p == null) return;
+                        var inv2 = p.getInventory();
+                        ItemStack orig = inv2.getItemInMainHand();
+                        inv2.setItemInMainHand(syntheticTool(stateRef));
+                        try {
+                            NexoBlocks.place(brokenNexoId, targetLoc);
+                            NexoBlocks.remove(targetLoc, p);
+                        } finally {
+                            inv2.setItemInMainHand(orig);
+                        }
+                    }, i);
+                }
+            }
         } else {
             // Vanilla / modded block: fire BlockBreakEvent first so RoseLoot's
             // generic BlockListener (and any other plugin) sees the break, then
@@ -447,33 +457,6 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
         }
     }
 
-    /**
-     * Fortune multiplier hook: RoseLoot drops its loot table items via the
-     * world drop API which fires {@link org.bukkit.event.entity.ItemSpawnEvent}.
-     * If the spawning location matches a breaker block currently in
-     * {@link #pendingFortune}, we inflate the dropped stack by a random number
-     * of extra units. Formula: extra = random(0, fortune+1) inclusive —
-     * Fortune 1 → 0..2 extra, Fortune 2 → 0..3 extra, Fortune 3 → 0..4 extra.
-     *
-     * <p>Mutating the existing ItemStack's amount (rather than spawning a
-     * second Item entity) avoids recursive ItemSpawnEvent calls and keeps
-     * the drop visually consistent.
-     */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onItemSpawn(org.bukkit.event.entity.ItemSpawnEvent event) {
-        if (pendingFortune.isEmpty()) return;
-        org.bukkit.entity.Item item = event.getEntity();
-        Location loc = item.getLocation();
-        String key = BlockBreakerManager.keyOf(loc.getBlock().getLocation());
-        Integer fortune = pendingFortune.get(key);
-        if (fortune == null || fortune <= 0) return;
-
-        int extra = java.util.concurrent.ThreadLocalRandom.current().nextInt(fortune + 2);
-        if (extra <= 0) return;
-        ItemStack stack = item.getItemStack();
-        stack.setAmount(stack.getAmount() + extra);
-        item.setItemStack(stack);
-    }
 
     public void shutdown() {
         // Synchronous final save so we don't lose the latest state.

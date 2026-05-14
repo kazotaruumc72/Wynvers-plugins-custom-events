@@ -12,8 +12,8 @@
     <description>Plugins addon providing custom events and Nexo item support via giveItem NexoItems:&lt;id&gt;</description>
 
     <properties>
-        <maven.compiler.source>16</maven.compiler.source>
-        <maven.compiler.target>16</maven.compiler.target>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -39,6 +39,41 @@
             </resource>
         </resources>
     </build>
+
+    <!-- The bundled zMenu API jar is compiled for Java 25 (class file v69).
+         When Maven itself runs under JDK < 25 (commonly JDK 21), the default
+         javac can't read the zMenu .class files and the build fails with
+         "wrong version 69.0, should be 65.0".
+
+         This profile auto-activates when the running JDK is below 25 and forks
+         javac to the local JDK 25 install. Adjust <jdk25.home> below if your
+         JDK 25 lives elsewhere, or override on the command line:
+             mvn -Djdk25.home=/path/to/jdk25 package
+         Alternatively, run with JAVA_HOME pointing to JDK 25 to skip the
+         profile entirely. -->
+    <profiles>
+        <profile>
+            <id>jdk25-fork</id>
+            <activation>
+                <jdk>[,25)</jdk>
+            </activation>
+            <properties>
+                <jdk25.home>C:/Program Files/Eclipse Adoptium/jdk-25.0.1.8-hotspot</jdk25.home>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <fork>true</fork>
+                            <executable>${jdk25.home}/bin/javac</executable>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <repositories>
         <!-- Spigot API -->
@@ -131,6 +166,17 @@
             <version>4.0.0-SNAPSHOT</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/zshop-api.jar</systemPath>
+        </dependency>
+
+        <!-- zMenu API (soft dependency, BlockBreaker upgrade GUI). Bundled
+             in the project's lib/ directory; the jar comes from the local
+             zMenu source build at ../zMenu/API/build/libs. -->
+        <dependency>
+            <groupId>fr.maxlego08</groupId>
+            <artifactId>zmenu-api</artifactId>
+            <version>1.1.1.5</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/zmenu-api-1.1.1.5.jar</systemPath>
         </dependency>
 
         <!-- Kotlin stdlib (required to extend Nexo's Kotlin abstract classes) -->

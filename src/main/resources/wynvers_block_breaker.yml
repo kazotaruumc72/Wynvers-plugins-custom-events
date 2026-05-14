@@ -1,0 +1,58 @@
+# WynversCustomEvents - Block Breaker custom_block
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Run: /nexo reload
+#
+# USAGE:
+# - Place the block: /give @p paper{NexoID:"wynvers_block_breaker"}
+# - Right-click on a face WITH the activator item (default:
+#   wynvers_breaker_remote) → that face becomes active. Repeat per face;
+#   the block can have up to 6 active faces at once.
+# - Every `break_interval_seconds`, every active face breaks the adjacent
+#   block on that side. `break_distance` controls how far the wave reaches.
+# - Shift+right-click (any item or empty hand) → opens the upgrade GUI,
+#   loaded from plugins/zMenu/inventories/blockbreaker.yml.
+# - Drop Fortune/Speed/Range/Silk/Auto-smelt upgrade items in the 5 center
+#   slots, click the green validation button → upgrades become permanent
+#   on this block until it is broken.
+#
+# BLACKLISTS:
+# - `blacklist_materials`: vanilla materials never broken. BEDROCK is always
+#   blocked even if the list is empty.
+# - `blacklist_nexo_blocks`: Nexo custom_block IDs that should also be
+#   skipped (e.g. unbreakable furniture-style blocks fed in by RoseLoot).
+#
+# ACTIVATOR:
+# - `activator_item` is a Nexo item id (e.g. wynvers_breaker_remote). Vanilla
+#   materials are intentionally rejected — every interaction item must be a
+#   Nexo-defined item. Leave empty to disable face toggling entirely.
+
+wynvers_block_breaker:
+  itemname: "<gold>Block Breaker</gold>"
+  material: PAPER
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 80
+    block_breaker:
+      gui_title: "&8Upgrades du Breaker"
+      break_interval_seconds: 5
+      break_distance: 1
+      max_upgrades: 5
+      activator_item: "wynvers_breaker_remote"
+      drop_as_items: true
+      blacklist_materials:
+        - BEDROCK
+        - BARRIER
+        - COMMAND_BLOCK
+        - END_PORTAL_FRAME
+        - END_PORTAL
+        - NETHER_PORTAL
+        - REINFORCED_DEEPSLATE
+      blacklist_nexo_blocks: []
+      particle: CRIT
+      sound: BLOCK_PISTON_EXTEND
+  Pack:
+    parent_model: block/cube_all
+    texture: wynvers:blocks/block_breaker

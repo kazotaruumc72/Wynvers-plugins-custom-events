@@ -1,0 +1,72 @@
+# WynversCustomEvents — zMenu BlockBreaker upgrade GUI
+#
+# This file is auto-copied to plugins/zMenu/inventories/blockbreaker.yml on
+# first start. The WynversCustomEvents BlockBreaker reads the slot positions
+# of the WCE_UPGRADE_SLOT and WCE_VALIDATION buttons from this file and opens
+# a Bukkit inventory mirroring the layout when a player shift+right-clicks
+# the custom block.
+#
+# Layout target:
+#
+#   row 1 :  X X X X X X X X X    (filler)
+#   row 2 :  X X 0 0 0 0 0 X X    (5 upgrade slots, columns 2..6)
+#   row 3 :  X X X X V X X X X    (validation button, column 4)
+#
+# The display name of the inventory comes from the block's mechanic config
+# (`gui_title`), so the `name` field below is only a fallback.
+
+name: "&8Upgrades du Breaker"
+size: 27
+fill_inventory: true
+fill_item:
+  material: GRAY_STAINED_GLASS_PANE
+  name: " "
+
+items:
+  upgrade_slot_1:
+    type: WCE_UPGRADE_SLOT
+    slot: 11
+    item:
+      material: LIGHT_GRAY_STAINED_GLASS_PANE
+      name: "&7Emplacement d'upgrade"
+      lore:
+        - "&8Dépose ici un item d'upgrade"
+        - "&8(Fortune, Vitesse, Portée…)"
+
+  upgrade_slot_2:
+    type: WCE_UPGRADE_SLOT
+    slot: 12
+    item:
+      material: LIGHT_GRAY_STAINED_GLASS_PANE
+      name: "&7Emplacement d'upgrade"
+
+  upgrade_slot_3:
+    type: WCE_UPGRADE_SLOT
+    slot: 13
+    item:
+      material: LIGHT_GRAY_STAINED_GLASS_PANE
+      name: "&7Emplacement d'upgrade"
+
+  upgrade_slot_4:
+    type: WCE_UPGRADE_SLOT
+    slot: 14
+    item:
+      material: LIGHT_GRAY_STAINED_GLASS_PANE
+      name: "&7Emplacement d'upgrade"
+
+  upgrade_slot_5:
+    type: WCE_UPGRADE_SLOT
+    slot: 15
+    item:
+      material: LIGHT_GRAY_STAINED_GLASS_PANE
+      name: "&7Emplacement d'upgrade"
+
+  validation:
+    type: WCE_VALIDATION
+    slot: 22
+    item:
+      material: LIME_DYE
+      name: "&aValider les upgrades"
+      lore:
+        - "&7Clique pour appliquer les upgrades"
+        - "&7déposées dans les emplacements."

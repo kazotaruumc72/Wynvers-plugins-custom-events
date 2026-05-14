@@ -14,8 +14,15 @@ softdepend:
   - PlaceholderAPI
   - RoseLoot
   - zShop
+  - zMenu
   - Factions
   - SaberFactions
+  - AxPickaxes
+
+# Must enable BEFORE AxPickaxes so our AxIntegrationsLoadEvent listener is
+# in place when AxPickaxes fires it (registrations after the event throw).
+loadbefore:
+  - AxPickaxes
 
 commands:
   wcereload:
@@ -34,4 +41,7 @@ permissions:
     default: op
   wynverscustomevents.checkvar:
     description: Allows checking custom variation usage with /wce checkvar
+    default: op
+  wynverscustomevents.reloadvar:
+    description: Allows reassigning duplicate custom variations with /wce reloadvar
     default: op

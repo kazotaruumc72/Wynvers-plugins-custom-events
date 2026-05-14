@@ -6,13 +6,20 @@ import com.wynvers.customevents.listener.FarmerEventListener;
 import com.wynvers.customevents.listener.SeedPlantListener;
 import com.wynvers.customevents.listener.HarvesterEventListener;
 import com.wynvers.customevents.listener.HarvestingToolListener;
+import com.wynvers.customevents.axpickaxes.AxPickaxesNexoIntegrator;
 import com.wynvers.customevents.listener.TeleporterInputListener;
+import com.wynvers.customevents.listener.VariationMenuListener;
 import com.wynvers.customevents.nexo.CustomVariationAnalyzer;
+import com.wynvers.customevents.nexo.CustomVariationReloader;
+import com.wynvers.customevents.nexo.VariationMenu;
 import com.wynvers.customevents.nexo.NexoWitherPropertiesLoader;
 import com.wynvers.customevents.nexo.WitherPropertiesMechanicFactory;
 import com.wynvers.customevents.nexo.farmer.FarmerMechanicFactory;
 import com.wynvers.customevents.nexo.harvester.HarvesterMechanicFactory;
 import com.wynvers.customevents.nexo.baseclaimprotector.BaseClaimProtectorMechanicFactory;
+import com.wynvers.customevents.nexo.blockbreaker.BlockBreakerMechanicFactory;
+import com.wynvers.customevents.nexo.blockbreaker.BlockBreakerUpgradeMechanicFactory;
+import com.wynvers.customevents.nexo.blockbreaker.BlockBreakerUpgradeMenuListener;
 import com.wynvers.customevents.nexo.breachcharge.BreachChargeMechanicFactory;
 import com.wynvers.customevents.nexo.breachcharge.DefuserMechanicFactory;
 import com.wynvers.customevents.nexo.enderjammer.EnderJammerMechanicFactory;
@@ -20,6 +27,7 @@ import com.wynvers.customevents.nexo.explosionreducer.ExplosionReducerMechanicFa
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.runeshop.ShopRuneMechanicFactory;
+import com.wynvers.customevents.zmenu.BlockBreakerZMenuBridge;
 import com.wynvers.customevents.nexo.slipthrough.SlipThroughListener;
 import com.wynvers.customevents.nexo.slipthrough.SlipThroughLoader;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
@@ -32,12 +40,20 @@ import com.wynvers.customevents.worldguard.BlockPriorityListener;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
+import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * WynversCustomEvents – OreStack addon that lets server admins declare
@@ -55,7 +71,10 @@ import java.io.File;
  *   - do: giveItem NexoItems:enchanted_cobblestone
  * </pre>
  */
-public class WynversCustomEvents extends JavaPlugin {
+public class WynversCustomEvents extends JavaPlugin implements TabCompleter {
+
+    private static final List<String> WCE_SUBCOMMANDS = Arrays.asList("checkvar", "reloadvar");
+
 
     private static WynversCustomEvents instance;
     private OrestackEventListener orestackListener;
@@ -184,9 +203,38 @@ public class WynversCustomEvents extends JavaPlugin {
                             getLogger().info("Registered Nexo mechanic '"
                                     + ShopRuneMechanicFactory.MECHANIC_ID + "'.");
                         }
+                        if (BlockBreakerMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new BlockBreakerMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + BlockBreakerMechanicFactory.MECHANIC_ID + "'.");
+                        }
+                        if (BlockBreakerUpgradeMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new BlockBreakerUpgradeMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + BlockBreakerUpgradeMechanicFactory.MECHANIC_ID + "'.");
+                        }
                     } catch (Throwable t) {
                         getLogger().warning(
                                 "Failed to register custom Nexo mechanic: " + t.getMessage());
+                    }
+                }
+            }, this);
+
+            // Re-run the deep custom_variation diagnostic after every /nexo reload.
+            // NexoItemsLoadedEvent fires once Nexo has finished (re)loading every item,
+            // so the runtime cache (NexoItems.itemConfigCache) is up-to-date and the
+            // scan reflects the actual loaded set — deleted items disappear immediately.
+            Bukkit.getPluginManager().registerEvents(new Listener() {
+                @EventHandler
+                public void onNexoItemsLoaded(
+                        com.nexomc.nexo.api.events.NexoItemsLoadedEvent e) {
+                    runCustomVariationDiagnostic();
+                    // Restore persisted BlockBreaker states now that Nexo's
+                    // item cache is populated — getMechanic(nexoId) works.
+                    if (BlockBreakerMechanicFactory.instance() != null) {
+                        BlockBreakerMechanicFactory.instance().restoreFromDisk();
                     }
                 }
             }, this);
@@ -225,6 +273,19 @@ public class WynversCustomEvents extends JavaPlugin {
             Bukkit.getPluginManager().registerEvents(
                     new TeleporterInputListener(this, teleporterSetupManager), this);
             getLogger().info("Teleporter mechanic enabled.");
+
+            // BlockBreaker upgrade GUI listener — handles all click/drag/close
+            // interactions on the 3-row Bukkit inventory opened on shift+right-click.
+            // The factory is created lazily by NexoMechanicsRegisteredEvent above,
+            // so we defer listener registration to the next tick.
+            Bukkit.getScheduler().runTask(this, () -> {
+                if (BlockBreakerMechanicFactory.instance() != null) {
+                    Bukkit.getPluginManager().registerEvents(
+                            new BlockBreakerUpgradeMenuListener(
+                                    BlockBreakerMechanicFactory.instance()), this);
+                    getLogger().info("BlockBreaker upgrade GUI listener enabled.");
+                }
+            });
 
             // Slip-through custom_block flag (e.g. fv_aether_leaves):
             // items dropped on the block fall through instead of resting on top.
@@ -275,6 +336,23 @@ public class WynversCustomEvents extends JavaPlugin {
             }
         }
 
+        // GUI menu for /wce checkvar (player-side paginated variation list)
+        Bukkit.getPluginManager().registerEvents(new VariationMenuListener(), this);
+
+        // AxPickaxes integration: enables 'NEXO:<block_id>' in ores.yml.
+        // Must run before AxPickaxes fires AxIntegrationsLoadEvent (guaranteed
+        // by 'loadbefore: AxPickaxes' in plugin.yml).
+        AxPickaxesNexoIntegrator.register(this);
+
+        // zMenu bridge: registers WCE_UPGRADE_SLOT / WCE_VALIDATION buttons
+        // and copies blockbreaker.yml into plugins/zMenu/inventories/.
+        BlockBreakerZMenuBridge.register(this);
+
+        PluginCommand wceCmd = getCommand("wce");
+        if (wceCmd != null) {
+            wceCmd.setTabCompleter(this);
+        }
+
         getLogger().info("WynversCustomEvents v" + getDescription().getVersion() + " enabled.");
     }
 
@@ -294,6 +372,9 @@ public class WynversCustomEvents extends JavaPlugin {
         }
         if (BaseClaimProtectorMechanicFactory.instance() != null) {
             BaseClaimProtectorMechanicFactory.instance().shutdown();
+        }
+        if (BlockBreakerMechanicFactory.instance() != null) {
+            BlockBreakerMechanicFactory.instance().shutdown();
         }
         if (slipThroughListener != null) {
             slipThroughListener.shutdown();
@@ -328,7 +409,7 @@ public class WynversCustomEvents extends JavaPlugin {
         if (cmdName.equals("wce")) {
             if (args.length == 0) {
                 sender.sendMessage("§cUsage: /wce <subcommand>");
-                sender.sendMessage("§7Subcommands: checkvar");
+                sender.sendMessage("§7Subcommands: " + String.join(", ", WCE_SUBCOMMANDS));
                 return true;
             }
 
@@ -342,10 +423,38 @@ public class WynversCustomEvents extends JavaPlugin {
                 return true;
             }
 
+            if (subcommand.equals("reloadvar")) {
+                if (!sender.hasPermission("wynverscustomevents.reloadvar")) {
+                    sender.sendMessage("§cYou do not have permission to run this command.");
+                    return true;
+                }
+                executeReloadVar(sender);
+                return true;
+            }
+
             return false;
         }
 
         return false;
+    }
+
+    @Override
+    public @Nullable List<String> onTabComplete(@NotNull CommandSender sender,
+                                                @NotNull Command command,
+                                                @NotNull String alias,
+                                                @NotNull String[] args) {
+        if (!command.getName().equalsIgnoreCase("wce")) {
+            return Collections.emptyList();
+        }
+        if (args.length == 1) {
+            String prefix = args[0].toLowerCase();
+            List<String> matches = new ArrayList<>();
+            for (String sub : WCE_SUBCOMMANDS) {
+                if (sub.startsWith(prefix)) matches.add(sub);
+            }
+            return matches;
+        }
+        return Collections.emptyList();
     }
 
     /**
@@ -387,6 +496,16 @@ public class WynversCustomEvents extends JavaPlugin {
             sender.sendMessage("§c" + result.error);
             return;
         }
+
+        // Players get the paginated GUI; console still gets the text report.
+        if (sender instanceof Player player) {
+            new VariationMenu(result, 0).open(player);
+            return;
+        }
+
+        sender.sendMessage("§7Source: " + (result.runtimeBacked
+                ? "§aNexo runtime cache (live)"
+                : "§eYAML files (Nexo runtime not yet loaded)"));
 
         // Display duplicates
         if (!result.duplicates.isEmpty()) {
@@ -430,6 +549,69 @@ public class WynversCustomEvents extends JavaPlugin {
 
         sender.sendMessage("");
         sender.sendMessage("§6Total used: §a" + result.usedVariations.size() + "§6, Free: §a" + result.freeVariations.size());
+    }
+
+    /**
+     * Executes the /wce reloadvar command: reassigns duplicate
+     * custom_variation values to free ones.
+     */
+    private void executeReloadVar(CommandSender sender) {
+        if (Bukkit.getPluginManager().getPlugin("Nexo") == null) {
+            sender.sendMessage("§cNexo is not installed.");
+            return;
+        }
+
+        sender.sendMessage("§6Reassigning duplicate custom_variation values...");
+
+        CustomVariationReloader reloader = new CustomVariationReloader(this);
+        CustomVariationReloader.ReloadResult result = reloader.reload(resolveNexoItemsDir());
+
+        if (result.hasError()) {
+            sender.sendMessage("§c" + result.error);
+            return;
+        }
+
+        if (result.reassignments.isEmpty()) {
+            sender.sendMessage("§a✓ No duplicates found - nothing to do.");
+            return;
+        }
+
+        sender.sendMessage("§a✓ Reassigned §e" + result.reassignments.size()
+                + "§a item(s) across §e" + result.filesModified + "§a file(s):");
+        for (CustomVariationReloader.ReassignmentInfo r : result.reassignments) {
+            sender.sendMessage("  §7" + r.itemId + ": §c" + r.oldVariation
+                    + " §7→ §a" + r.newVariation);
+        }
+        sender.sendMessage("§7Run §f/nexo reload all§7 to apply changes in-game.");
+    }
+
+    /**
+     * Re-runs the custom_variation diagnostic after Nexo has finished
+     * (re)loading items. Logs a summary and any duplicates to the console
+     * so the operator running /nexo reload sees the result inline.
+     */
+    private void runCustomVariationDiagnostic() {
+        try {
+            CustomVariationAnalyzer analyzer = new CustomVariationAnalyzer(this);
+            CustomVariationAnalyzer.VariationAnalysisResult result =
+                    analyzer.analyzeVariations(resolveNexoItemsDir());
+            if (result.hasError()) {
+                getLogger().warning("[checkvar] " + result.error);
+                return;
+            }
+            String source = result.runtimeBacked ? "runtime" : "yaml";
+            getLogger().info("[checkvar] post-reload (" + source + ") — used: "
+                    + result.usedVariations.size()
+                    + ", free: " + result.freeVariations.size()
+                    + ", duplicates: " + result.duplicates.size());
+            if (!result.duplicates.isEmpty()) {
+                result.duplicates.forEach((variation, items) ->
+                        getLogger().warning("[checkvar]  duplicate var " + variation
+                                + ": " + String.join(", ", items)));
+            }
+        } catch (Throwable t) {
+            getLogger().warning("[checkvar] auto-scan failed: " + t.getMessage());
+        }
     }
 
     /**

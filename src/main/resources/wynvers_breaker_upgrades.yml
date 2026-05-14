@@ -1,0 +1,102 @@
+# WynversCustomEvents - BlockBreaker companion items (activator + upgrades)
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Run: /nexo reload
+#
+# CONTENTS:
+# - wynvers_breaker_remote   : the activator item (right-click a face on the
+#                              BlockBreaker to toggle that face active).
+# - wynvers_fortune_{1..3}   : Fortune-style drop multiplier upgrades.
+# - wynvers_speed_1          : reserved for a faster break tick (handled by
+#                              the breaker's interval — included as a marker).
+# - wynvers_range_1          : +1 to the per-face break distance.
+# - wynvers_silk_touch       : silk touch — drops the block as-is.
+# - wynvers_auto_smelt       : marker for auto-smelt (apply via your own loot
+#                              table; see comments in wynvers_block_breaker.yml).
+
+# ─── Activator ────────────────────────────────────────────────────────────
+wynvers_breaker_remote:
+  itemname: "<gold>Télécommande du Breaker</gold>"
+  material: BLAZE_ROD
+  lore:
+    - "<gray>Clic droit sur une face du Breaker</gray>"
+    - "<gray>pour activer/désactiver la face.</gray>"
+  Mechanics:
+    custom_durability:
+      value: 1
+
+# ─── Upgrades (Fortune) ───────────────────────────────────────────────────
+wynvers_fortune_1:
+  itemname: "<aqua>Upgrade Fortune I</aqua>"
+  material: EXPERIENCE_BOTTLE
+  lore:
+    - "<gray>Augmente les drops cassés par le Breaker (niv. 1).</gray>"
+  Mechanics:
+    block_breaker_upgrade:
+      type: fortune
+      value: 1
+
+wynvers_fortune_2:
+  itemname: "<aqua>Upgrade Fortune II</aqua>"
+  material: EXPERIENCE_BOTTLE
+  lore:
+    - "<gray>Augmente les drops cassés par le Breaker (niv. 2).</gray>"
+  Mechanics:
+    block_breaker_upgrade:
+      type: fortune
+      value: 2
+
+wynvers_fortune_3:
+  itemname: "<aqua>Upgrade Fortune III</aqua>"
+  material: EXPERIENCE_BOTTLE
+  lore:
+    - "<gray>Augmente les drops cassés par le Breaker (niv. 3).</gray>"
+  Mechanics:
+    block_breaker_upgrade:
+      type: fortune
+      value: 3
+
+# ─── Upgrade (Vitesse) ────────────────────────────────────────────────────
+wynvers_speed_1:
+  itemname: "<yellow>Upgrade Vitesse I</yellow>"
+  material: SUGAR
+  lore:
+    - "<gray>Augmente la vitesse de minage du Breaker.</gray>"
+  Mechanics:
+    block_breaker_upgrade:
+      type: speed
+      value: 1
+
+# ─── Upgrade (Portée) ─────────────────────────────────────────────────────
+wynvers_range_1:
+  itemname: "<light_purple>Upgrade Portée I</light_purple>"
+  material: SPYGLASS
+  lore:
+    - "<gray>+1 à la distance de minage par face active.</gray>"
+  Mechanics:
+    block_breaker_upgrade:
+      type: range
+      value: 1
+
+# ─── Upgrade (Silk Touch) ─────────────────────────────────────────────────
+wynvers_silk_touch:
+  itemname: "<white>Upgrade Silk Touch</white>"
+  material: STRING
+  lore:
+    - "<gray>Le Breaker récolte les blocs intacts.</gray>"
+  Mechanics:
+    block_breaker_upgrade:
+      type: silk_touch
+      value: 1
+
+# ─── Upgrade (Auto-smelt) ─────────────────────────────────────────────────
+wynvers_auto_smelt:
+  itemname: "<gold>Upgrade Auto-Smelt</gold>"
+  material: BLAZE_POWDER
+  lore:
+    - "<gray>Fond automatiquement les drops du Breaker.</gray>"
+  Mechanics:
+    block_breaker_upgrade:
+      type: auto_smelt
+      value: 1

@@ -1,6 +1,7 @@
 package com.wynvers.customevents.nexo;
 
 import com.wynvers.customevents.WynversCustomEvents;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
@@ -16,26 +17,31 @@ public class CustomVariationAnalyzer {
 
     public VariationAnalysisResult analyzeVariations(File nexoItemsDir) {
         VariationAnalysisResult result = new VariationAnalysisResult();
-
-        if (nexoItemsDir == null || !nexoItemsDir.isDirectory()) {
-            result.error = "Nexo items directory not found: " +
-                    (nexoItemsDir != null ? nexoItemsDir.getAbsolutePath() : "null");
-            return result;
-        }
-
         Map<Integer, List<String>> usedVariations = new HashMap<>();
 
-        scanDirectory(nexoItemsDir, usedVariations);
+        // Prefer Nexo's runtime cache when available: only items Nexo actually
+        // loaded count, so removed/excluded entries vanish immediately after
+        // /nexo reload. Fall back to a recursive YAML walk if the cache is
+        // unavailable (Nexo missing, or items not yet loaded).
+        boolean usedRuntime = scanFromNexoRuntime(usedVariations);
+        if (!usedRuntime) {
+            if (nexoItemsDir == null || !nexoItemsDir.isDirectory()) {
+                result.error = "Nexo items directory not found: " +
+                        (nexoItemsDir != null ? nexoItemsDir.getAbsolutePath() : "null");
+                return result;
+            }
+            scanDirectory(nexoItemsDir, usedVariations);
+        }
 
-        // Find duplicates
         for (Map.Entry<Integer, List<String>> entry : usedVariations.entrySet()) {
             if (entry.getValue().size() > 1) {
                 result.duplicates.put(entry.getKey(), entry.getValue());
             }
         }
 
-        // Find free variations (0-255 typically, but let's check up to 256)
-        int maxVariation = 256;
+        // NOTEBLOCK custom_block type allows up to 1149 variations (one per
+        // blockstate), so the free pool spans [0, 1149).
+        int maxVariation = 1149;
         for (int i = 0; i < maxVariation; i++) {
             if (!usedVariations.containsKey(i)) {
                 result.freeVariations.add(i);
@@ -43,8 +49,30 @@ public class CustomVariationAnalyzer {
         }
 
         result.usedVariations = usedVariations;
+        result.runtimeBacked = usedRuntime;
 
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean scanFromNexoRuntime(Map<Integer, List<String>> usedVariations) {
+        try {
+            if (Bukkit.getPluginManager().getPlugin("Nexo") == null) return false;
+            Map<String, kotlin.Pair<File, ConfigurationSection>> cache =
+                    com.nexomc.nexo.api.NexoItems.INSTANCE.getItemConfigCache();
+            if (cache == null || cache.isEmpty()) return false;
+
+            for (Map.Entry<String, kotlin.Pair<File, ConfigurationSection>> e : cache.entrySet()) {
+                String itemId = e.getKey();
+                ConfigurationSection sec = e.getValue() != null ? e.getValue().getSecond() : null;
+                if (sec == null) continue;
+                collectVariationsRecursive(itemId, sec, usedVariations);
+            }
+            return true;
+        } catch (Throwable t) {
+            plugin.getLogger().fine("[CustomVariationAnalyzer] runtime scan unavailable: " + t.getMessage());
+            return false;
+        }
     }
 
     private void scanDirectory(File dir, Map<Integer, List<String>> usedVariations) {
@@ -75,45 +103,29 @@ public class CustomVariationAnalyzer {
         for (String itemId : config.getKeys(false)) {
             ConfigurationSection itemSec = config.getConfigurationSection(itemId);
             if (itemSec == null) continue;
-
-            extractVariations(itemId, itemSec, usedVariations);
+            collectVariationsRecursive(itemId, itemSec, usedVariations);
         }
     }
 
-    private void extractVariations(String itemId, ConfigurationSection section, Map<Integer, List<String>> usedVariations) {
-        ConfigurationSection mechanics = section.getConfigurationSection("Mechanics");
-        if (mechanics == null) {
-            mechanics = section.getConfigurationSection("mechanics");
-        }
-
-        if (mechanics != null) {
-            // Check custom_block mechanic
-            ConfigurationSection customBlock = mechanics.getConfigurationSection("custom_block");
-            if (customBlock != null && customBlock.contains("custom_variation")) {
-                int variation = customBlock.getInt("custom_variation");
-                addVariationEntry(usedVariations, variation, itemId);
-            }
-
-            // Check other mechanics recursively for custom_variation
-            for (String key : mechanics.getKeys(false)) {
-                if (key.equals("custom_block")) continue;
-                ConfigurationSection mechSection = mechanics.getConfigurationSection(key);
-                if (mechSection != null && mechSection.contains("custom_variation")) {
-                    int variation = mechSection.getInt("custom_variation");
-                    addVariationEntry(usedVariations, variation, itemId);
-                }
+    private void collectVariationsRecursive(String itemId,
+                                            ConfigurationSection sec,
+                                            Map<Integer, List<String>> usedVariations) {
+        for (String key : sec.getKeys(false)) {
+            Object val = sec.get(key);
+            if ("custom_variation".equals(key) && val instanceof Number) {
+                int variation = ((Number) val).intValue();
+                usedVariations.computeIfAbsent(variation, k -> new ArrayList<>()).add(itemId);
+            } else if (val instanceof ConfigurationSection) {
+                collectVariationsRecursive(itemId, (ConfigurationSection) val, usedVariations);
             }
         }
-    }
-
-    private void addVariationEntry(Map<Integer, List<String>> map, int variation, String itemId) {
-        map.computeIfAbsent(variation, k -> new ArrayList<>()).add(itemId);
     }
 
     public static class VariationAnalysisResult {
         public Map<Integer, List<String>> usedVariations = new HashMap<>();
         public Map<Integer, List<String>> duplicates = new HashMap<>();
         public List<Integer> freeVariations = new ArrayList<>();
+        public boolean runtimeBacked = false;
         public String error = null;
 
         public boolean hasError() {

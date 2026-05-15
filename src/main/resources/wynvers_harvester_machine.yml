@@ -1,0 +1,75 @@
+# WynversCustomEvents - Harvester Machine custom_block
+#
+# INSTALLATION:
+# 1. Place this file in plugins/Nexo/items/
+# 2. Place wynvers_harvester_storage.yml + wynvers_harvester_fuel.yml in the same folder
+# 3. Run /nexo reload
+#
+# USAGE:
+# - The machine must be placed on TOP of a block containing a water source
+#   (water source, waterlogged stairs/slabs/leaves, ...). Placement is
+#   refused otherwise (require_water_below: true).
+# - Toss `wynvers_harvester_fuel` items on top of the machine; each item
+#   adds `fuel_duration` to the active timer and swaps the texture to the
+#   active variant. A hologram displays the remaining time.
+# - While active, every `harvest_interval_seconds` the machine breaks every
+#   fully-grown vanilla crop (Ageable at max age) and every whitelisted
+#   Nexo crop in a `radius` cube around itself, then replants them.
+# - Drops are pushed into the nearest tracked `wynvers_harvester_storage`
+#   block within `storage_search_radius` blocks. If none exists, items fall
+#   on the ground.
+# - When the timer expires, the texture reverts to this variant.
+
+wynvers_harvester_machine:
+  itemname: "<gold>Récolteur</gold>"
+  material: PAPER
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 350
+    harvester_machine:
+      radius: 3                              # 7x7x7 scan cube around the machine
+      harvest_interval_seconds: 6
+      fuel_item: wynvers_harvester_fuel      # Nexo item id of the fuel
+      fuel_duration: 5m                      # added per fuel item consumed
+      feed_radius: 1.5                       # detect fuel-item drops on top
+      require_water_below: true              # placement check
+      active_variant: wynvers_harvester_machine_on
+      storage_search_radius: 5
+      whitelist_nexo_crops:
+        # final-stage Nexo id  →  first-stage Nexo id (replanted after harvest)
+        # Examples (replace with your actual Nexo ids):
+        # fv_wheat_stage_7:   fv_wheat_stage_0
+        # fv_carrot_stage_5:  fv_carrot_stage_0
+      particle: HAPPY_VILLAGER
+      harvest_sound: BLOCK_CROP_BREAK
+      fuel_sound: BLOCK_FURNACE_FIRE_CRACKLE
+  Pack:
+    parent_model: block/cube_all
+    texture: wynvers:blocks/harvester_machine_off
+
+# ─── Active variant (separate Nexo id, same mechanic config) ────────────────
+wynvers_harvester_machine_on:
+  itemname: "<gold>Récolteur (actif)</gold>"
+  material: PAPER
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 351
+    harvester_machine:
+      radius: 3
+      harvest_interval_seconds: 6
+      fuel_item: wynvers_harvester_fuel
+      fuel_duration: 5m
+      feed_radius: 1.5
+      require_water_below: false             # already placed — skip
+      active_variant: wynvers_harvester_machine_on
+      storage_search_radius: 5
+      whitelist_nexo_crops:
+        # fv_wheat_stage_7:   fv_wheat_stage_0
+      particle: HAPPY_VILLAGER
+      harvest_sound: BLOCK_CROP_BREAK
+      fuel_sound: BLOCK_FURNACE_FIRE_CRACKLE
+  Pack:
+    parent_model: block/cube_all
+    texture: wynvers:blocks/harvester_machine_on

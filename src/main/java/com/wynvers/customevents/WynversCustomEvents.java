@@ -25,6 +25,8 @@ import com.wynvers.customevents.nexo.breachcharge.DefuserMechanicFactory;
 import com.wynvers.customevents.nexo.enderjammer.EnderJammerMechanicFactory;
 import com.wynvers.customevents.nexo.explosionreducer.ExplosionReducerMechanicFactory;
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
+import com.wynvers.customevents.nexo.harvestermachine.HarvesterMachineMechanicFactory;
+import com.wynvers.customevents.nexo.harvestermachine.HarvesterStorageMechanicFactory;
 import com.wynvers.customevents.nexo.hydrodrill.HydroDrillMechanicFactory;
 import com.wynvers.customevents.nexo.runeshop.ShopRuneMechanicFactory;
 import com.wynvers.customevents.zmenu.BlockBreakerZMenuBridge;
@@ -230,6 +232,18 @@ public class WynversCustomEvents extends JavaPlugin implements TabCompleter {
                             getLogger().info("Registered Nexo mechanic '"
                                     + BlockBreakerUpgradeMechanicFactory.MECHANIC_ID + "'.");
                         }
+                        if (HarvesterStorageMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new HarvesterStorageMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + HarvesterStorageMechanicFactory.MECHANIC_ID + "'.");
+                        }
+                        if (HarvesterMachineMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new HarvesterMachineMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + HarvesterMachineMechanicFactory.MECHANIC_ID + "'.");
+                        }
                     } catch (Throwable t) {
                         getLogger().warning(
                                 "Failed to register custom Nexo mechanic: " + t.getMessage());
@@ -390,6 +404,12 @@ public class WynversCustomEvents extends JavaPlugin implements TabCompleter {
         }
         if (BlockBreakerMechanicFactory.instance() != null) {
             BlockBreakerMechanicFactory.instance().shutdown();
+        }
+        if (HarvesterMachineMechanicFactory.instance() != null) {
+            HarvesterMachineMechanicFactory.instance().shutdown();
+        }
+        if (HarvesterStorageMechanicFactory.instance() != null) {
+            HarvesterStorageMechanicFactory.instance().shutdown();
         }
         if (slipThroughListener != null) {
             slipThroughListener.shutdown();

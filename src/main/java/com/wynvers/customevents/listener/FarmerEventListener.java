@@ -31,13 +31,19 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class FarmerEventListener implements Listener {
 
+    private static FarmerEventListener instance;
+
     private final WynversCustomEvents plugin;
     private final ActionExecutor actions;
 
     public FarmerEventListener(WynversCustomEvents plugin) {
         this.plugin = plugin;
         this.actions = new ActionExecutor(plugin);
+        instance = this;
     }
+
+    /** Shared accessor so other mechanics (e.g. HarvesterMachine) can fire manual placements. */
+    public static FarmerEventListener instance() { return instance; }
 
     private static FarmerMechanic mechanicFor(String itemId) {
         FarmerMechanicFactory f = FarmerMechanicFactory.instance();

@@ -1,0 +1,11 @@
+# WynversCustomEvents - Harvester Machine fuel
+#
+# Toss this on top of a Harvester Machine to power it.
+# Each item consumed adds the machine's `fuel_duration` (default 5 minutes).
+
+wynvers_harvester_fuel:
+  itemname: "<yellow>Carburant du Récolteur</yellow>"
+  material: BLAZE_POWDER
+  lore:
+    - "<gray>Jette cet item sur un Récolteur</gray>"
+    - "<gray>pour l'alimenter pendant 5 minutes.</gray>"

@@ -1,0 +1,26 @@
+# WynversCustomEvents - Harvester Storage block
+#
+# Companion to wynvers_harvester_machine: a 54-slot virtual chest.
+#
+# USAGE:
+# - Right-click to open the 54-slot GUI.
+# - Nearby Harvester Machines (within their `storage_search_radius`) deposit
+#   their drops here automatically.
+# - Place the storage block above a vanilla hopper to export items: the
+#   hopper pulls one item every `hopper_pull_period_ticks * 2` ticks
+#   (defaulting to ~16 ticks, vanilla speed).
+# - On break the inventory contents drop on the ground.
+
+wynvers_harvester_storage:
+  itemname: "<gold>Coffre du Récolteur</gold>"
+  material: PAPER
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 360
+    harvester_storage:
+      gui_title: "&8Coffre du Récolteur"
+      hopper_pull_period_ticks: 8
+  Pack:
+    parent_model: block/cube_all
+    texture: wynvers:blocks/harvester_storage

@@ -21,6 +21,16 @@ wynvers_harvester_storage:
     harvester_storage:
       gui_title: "&8Coffre du Récolteur"
       hopper_pull_period_ticks: 8
+      pickup_radius: 5.0           # blocks — all directions; sucks loose items inside this cube
+      pickup_whitelist:            # Only these items get absorbed. Empty = absorb everything.
+        - "nexo:barley"            # Nexo item id, prefixed with "nexo:"
+        - "nexo:barley_seed"
+        - "WHEAT"                  # Bare entries are treated as vanilla Material names
+        - "WHEAT_SEEDS"
+        - "CARROT"
+        - "POTATO"
+        - "BEETROOT"
+        - "BEETROOT_SEEDS"
   Pack:
     parent_model: block/cube_all
     texture: wynvers:blocks/harvester_storage

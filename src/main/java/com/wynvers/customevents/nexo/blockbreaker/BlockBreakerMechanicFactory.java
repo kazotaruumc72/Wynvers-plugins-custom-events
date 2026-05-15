@@ -82,9 +82,13 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
         for (var e : loaded.entrySet()) {
             manager.put(e.getKey(), e.getValue());
             BlockBreakerMechanic mech = getMechanic(e.getValue().nexoId);
-            if (mech == null || e.getValue().activeFaces.isEmpty()) continue;
+            if (mech == null) continue;
             Block breakerBlock = resolveBlock(e.getKey());
             if (breakerBlock == null) continue;
+            // Re-apply the texture variant in case the saved nexoId got out of
+            // sync with the live block (e.g. world data restored from backup).
+            applyVariant(breakerBlock, e.getValue(), mech);
+            if (e.getValue().activeFaces.isEmpty()) continue;
             startBreakLoop(breakerBlock, e.getKey(), mech);
             resumed++;
         }
@@ -134,7 +138,8 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) return;
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_BLOCK && action != Action.LEFT_CLICK_BLOCK) return;
         Block clicked = event.getClickedBlock();
         if (clicked == null) return;
 
@@ -145,6 +150,15 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
 
         Player player = event.getPlayer();
         String blockKey = BlockBreakerManager.keyOf(clicked.getLocation());
+
+        // Left-click with the activator → show status, no face toggle, no break.
+        if (action == Action.LEFT_CLICK_BLOCK) {
+            ItemStack inHand = event.getItem();
+            if (!isActivator(inHand, mech)) return;
+            event.setCancelled(true);
+            sendStatus(player, manager.get(blockKey));
+            return;
+        }
 
         // Shift+right-click → upgrade GUI (no activator required, no face toggle).
         if (player.isSneaking()) {
@@ -187,7 +201,63 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
         } else if (state.task == null) {
             startBreakLoop(clicked, blockKey, mech);
         }
+        applyVariant(clicked, state, mech);
         saveAsync();
+    }
+
+    /**
+     * If the breaker mechanic declares a {@code variant_base}, swap the
+     * underlying Nexo block to the variant matching the current set of active
+     * faces so the texture reflects each face's state.
+     *
+     * <p>The variant id is computed from {@link BlockBreakerMechanic#computeVariantId}.
+     * If Nexo doesn't know that id (variant not defined by the admin), the
+     * block is left as-is and a warning is logged.
+     */
+    private void applyVariant(Block block, BlockBreakerManager.State state, BlockBreakerMechanic mech) {
+        if (!mech.hasVariants()) {
+            plugin.getLogger().fine("[BlockBreaker] applyVariant: mechanic has no variants — skip.");
+            return;
+        }
+        String desired = mech.computeVariantId(state.activeFaces);
+        if (desired == null || desired.isEmpty()) {
+            plugin.getLogger().warning("[BlockBreaker] applyVariant: computeVariantId returned null/empty "
+                    + "(variant_base='" + mech.variantBase() + "', faces=" + state.activeFaces + ").");
+            return;
+        }
+
+        CustomBlockMechanic current = NexoBlocks.customBlockMechanic(block);
+        if (current != null && desired.equals(current.getItemID())) {
+            plugin.getLogger().fine("[BlockBreaker] applyVariant: already on '" + desired + "', no swap.");
+            return;
+        }
+
+        if (!NexoBlocks.isCustomBlock(desired)) {
+            plugin.getLogger().warning("[BlockBreaker] Variant '" + desired
+                    + "' is not registered as a Nexo custom_block. "
+                    + "Make sure plugins/Nexo/items/<file>_breaker_variants.yml was generated and /nexo reload was run.");
+            return;
+        }
+
+        // Resolve the BlockData of the target variant and apply it directly to
+        // the block — non-destructive, no place-event, no item drops.
+        org.bukkit.block.data.BlockData newData = NexoBlocks.blockData(desired);
+        if (newData == null) {
+            plugin.getLogger().warning("[BlockBreaker] NexoBlocks.blockData('" + desired
+                    + "') returned null — cannot swap texture.");
+            return;
+        }
+        block.setBlockData(newData, false);
+
+        CustomBlockMechanic after = NexoBlocks.customBlockMechanic(block);
+        if (after != null && desired.equals(after.getItemID())) {
+            state.nexoId = desired;
+            plugin.getLogger().info("[BlockBreaker] Swapped to variant '" + desired + "'.");
+        } else {
+            plugin.getLogger().warning("[BlockBreaker] Swap to '" + desired
+                    + "' didn't take — block now resolves to '"
+                    + (after == null ? "null" : after.getItemID()) + "'.");
+        }
     }
 
     /** French name of a {@link BlockFace} for player-facing messages. */
@@ -201,6 +271,50 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
             case DOWN  -> "Bas";
             default    -> face.name();
         };
+    }
+
+    /** French name of an upgrade type for player-facing messages. */
+    private static String upgradeFr(BlockBreakerUpgrade.Type type) {
+        return switch (type) {
+            case FORTUNE     -> "Fortune";
+            case SPEED       -> "Vitesse";
+            case RANGE       -> "Portée";
+            case SILK_TOUCH  -> "Toucher de Soie";
+            case AUTO_SMELT  -> "Auto-Fusion";
+            default          -> type.name();
+        };
+    }
+
+    /**
+     * Sends the breaker's current status (active faces + applied upgrades) to
+     * the player as a chat message. Tolerates a {@code null} state (untouched
+     * breaker — nothing toggled yet) by reporting empty lists.
+     */
+    private void sendStatus(Player player, BlockBreakerManager.State state) {
+        player.sendMessage("§6═════ §eBlock Breaker §6═════");
+
+        if (state == null || state.activeFaces.isEmpty()) {
+            player.sendMessage("§7Faces actives : §caucune");
+        } else {
+            StringBuilder faces = new StringBuilder("§7Faces actives §8(§f")
+                    .append(state.activeFaces.size()).append("§8/§f6§8)§7 : ");
+            boolean first = true;
+            for (BlockFace f : state.activeFaces) {
+                if (!first) faces.append("§7, ");
+                faces.append("§a").append(faceFr(f));
+                first = false;
+            }
+            player.sendMessage(faces.toString());
+        }
+
+        if (state == null || state.upgrades.isEmpty()) {
+            player.sendMessage("§7Upgrades : §caucune");
+        } else {
+            player.sendMessage("§7Upgrades :");
+            for (var e : state.upgrades.entrySet()) {
+                player.sendMessage("  §8• §a" + upgradeFr(e.getKey()) + " §7→ §f" + e.getValue());
+            }
+        }
     }
 
     private boolean isActivator(ItemStack stack, BlockBreakerMechanic mech) {
@@ -226,9 +340,12 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
                 BlockBreakerManager.State s = manager.get(blockKey);
                 if (s == null) { cancel(); return; }
 
-                // The breaker itself was removed?
+                // The breaker itself was removed? Tolerate variant swaps —
+                // accept any block whose id resolves to *some* BlockBreaker
+                // mechanic (so a face-toggle swap to wynvers_block_breaker_n
+                // doesn't kill the loop attached to wynvers_block_breaker).
                 CustomBlockMechanic cb = NexoBlocks.customBlockMechanic(breaker);
-                if (cb == null || !state.nexoId.equals(cb.getItemID())) {
+                if (cb == null || getMechanic(cb.getItemID()) == null) {
                     manager.remove(blockKey);
                     cancel();
                     return;

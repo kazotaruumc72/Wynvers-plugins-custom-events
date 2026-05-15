@@ -88,6 +88,21 @@ public class WynversCustomEvents extends JavaPlugin implements TabCompleter {
 
     @Override
     public void onLoad() {
+        // BlockBreaker variant generator: produces the sibling Nexo items
+        // (one per face combination) BEFORE Nexo's onEnable scans the items
+        // directory. Without this, active_textures would have nothing to swap
+        // to at runtime.
+        saveDefaultConfig();
+        try {
+            File nexoItemsDir = resolveNexoItemsDir();
+            if (nexoItemsDir.exists()) {
+                new com.wynvers.customevents.nexo.blockbreaker.BlockBreakerVariantGenerator(this)
+                        .generateAll(nexoItemsDir);
+            }
+        } catch (Throwable t) {
+            getLogger().warning("BlockBreaker variant generation failed: " + t.getMessage());
+        }
+
         // WorldGuard custom flags MUST be registered during onLoad(), before
         // WG starts loading region data. Skip silently when WG is absent.
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {

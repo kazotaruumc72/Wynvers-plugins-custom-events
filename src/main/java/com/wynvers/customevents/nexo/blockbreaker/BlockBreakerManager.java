@@ -23,7 +23,12 @@ import java.util.UUID;
 public class BlockBreakerManager {
 
     public static final class State {
-        public final String nexoId;
+        /**
+         * Current Nexo variant id of the breaker block. Mutable so face-toggle
+         * swaps to a different texture variant can be tracked (see
+         * {@link com.wynvers.customevents.nexo.blockbreaker.BlockBreakerMechanic#computeVariantId}).
+         */
+        public String nexoId;
         public final UUID ownerId;
         public final EnumSet<BlockFace> activeFaces = EnumSet.noneOf(BlockFace.class);
         public final EnumMap<BlockBreakerUpgrade.Type, Integer> upgrades = new EnumMap<>(BlockBreakerUpgrade.Type.class);

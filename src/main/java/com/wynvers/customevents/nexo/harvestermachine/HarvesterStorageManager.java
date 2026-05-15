@@ -6,6 +6,8 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.Hopper;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -41,11 +43,13 @@ public class HarvesterStorageManager implements Listener {
     public static final class StorageHolder implements InventoryHolder {
         public final String blockKey;
         public final Location location;
+        public final HarvesterStorageMechanic mechanic;
         public Inventory inventory;
 
-        StorageHolder(String blockKey, Location location) {
+        StorageHolder(String blockKey, Location location, HarvesterStorageMechanic mechanic) {
             this.blockKey = blockKey;
             this.location = location;
+            this.mechanic = mechanic;
         }
 
         @NotNull
@@ -78,7 +82,7 @@ public class HarvesterStorageManager implements Listener {
         String key = keyOf(block.getLocation());
         StorageHolder holder = storages.get(key);
         if (holder != null) return holder;
-        holder = new StorageHolder(key, block.getLocation().clone());
+        holder = new StorageHolder(key, block.getLocation().clone(), mech);
         String title = ChatColor.translateAlternateColorCodes('&', mech.guiTitle());
         holder.inventory = Bukkit.createInventory(holder, 54, title);
         storages.put(key, holder);
@@ -136,15 +140,63 @@ public class HarvesterStorageManager implements Listener {
         if (storages.isEmpty()) return;
         for (StorageHolder h : storages.values()) {
             if (h.location.getWorld() == null) continue;
+
+            // 1. Vacuum nearby Item entities into the storage (every tick).
+            vacuumNearbyItems(h);
+
+            // 2. Export one item to a hopper below every other manager tick
+            //    (manager runs every 4 ticks → hopper pull ~every 8 ticks).
+            if (tickCounter % 2 != 0) continue;
             Block storageBlock = h.location.getBlock();
             Block below = storageBlock.getRelative(0, -1, 0);
             if (below.getType() != Material.HOPPER) continue;
             if (!(below.getState() instanceof Hopper hopperState)) continue;
-            // Throttle: pull one item every 8 ticks (vanilla default) — we tick
-            // every 4 ticks so we transfer every other tick.
-            if (tickCounter % 2 != 0) continue;
-
             transferOneItem(h.inventory, hopperState.getInventory());
+        }
+    }
+
+    /**
+     * Pulls every loose {@link Item} entity within {@code pickup_radius} blocks
+     * of the storage into its inventory. This is what gives the storage its
+     * "vacuum" feel: any drop landing nearby (from a Harvester Machine, a
+     * player breaking a crop, etc.) is absorbed within a tick.
+     */
+    private void vacuumNearbyItems(StorageHolder holder) {
+        if (holder.inventory == null || holder.mechanic == null) return;
+        double r = holder.mechanic.pickupRadius();
+        Location centre = holder.location.clone().add(0.5, 0.5, 0.5);
+
+        // Items configured as fuel by any registered Harvester Machine are
+        // skipped so the user can re-fuel a depleted machine without the
+        // storage stealing the fuel item before the machine grabs it.
+        var harvesterFactory = HarvesterMachineMechanicFactory.instance();
+        var fuelIds = harvesterFactory == null
+                ? java.util.Collections.<String>emptySet()
+                : harvesterFactory.activeFuelIds();
+
+        for (Entity e : holder.location.getWorld().getNearbyEntities(centre, r, r, r)) {
+            if (!(e instanceof Item itemEntity)) continue;
+            if (!itemEntity.isValid() || itemEntity.isDead()) continue;
+            ItemStack stack = itemEntity.getItemStack();
+            if (stack == null || stack.getType().isAir()) continue;
+
+            // Skip harvester fuel items.
+            if (!fuelIds.isEmpty()) {
+                try {
+                    String nexoId = com.nexomc.nexo.api.NexoItems.idFromItem(stack);
+                    if (nexoId != null && fuelIds.contains(nexoId.toLowerCase(java.util.Locale.ROOT))) continue;
+                } catch (Throwable ignored) {}
+            }
+
+            // Whitelist filter — leave non-allowed items in the world.
+            if (!holder.mechanic.isAllowed(stack)) continue;
+
+            ItemStack leftover = deposit(holder, stack);
+            if (leftover == null) {
+                itemEntity.remove();
+            } else {
+                itemEntity.setItemStack(leftover);
+            }
         }
     }
 

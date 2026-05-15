@@ -83,6 +83,21 @@ public class HarvesterMachineMechanicFactory extends MechanicFactory implements 
 
     public static HarvesterMachineMechanicFactory instance() { return instance; }
 
+    /**
+     * Returns the set of Nexo item ids configured as fuel by every currently
+     * registered Harvester Machine. The Storage block uses this to skip
+     * absorbing fuel items so the user can re-fuel a depleted machine without
+     * the nearby storage stealing the fuel first.
+     */
+    public java.util.Set<String> activeFuelIds() {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (ActiveMachine m : active.values()) {
+            String fuel = m.mechanic.fuelItem();
+            if (fuel != null && !fuel.isEmpty()) ids.add(fuel.toLowerCase(Locale.ROOT));
+        }
+        return ids;
+    }
+
     @Override
     public @Nullable HarvesterMachineMechanic getMechanic(String itemId) {
         Mechanic m = super.getMechanic(itemId);
@@ -369,7 +384,24 @@ public class HarvesterMachineMechanicFactory extends MechanicFactory implements 
         return false;
     }
 
-    /** Handles Nexo furniture crops (the standard multi-stage crop shape). */
+    /**
+     * Handles Nexo furniture crops (the standard multi-stage crop shape).
+     *
+     * <p>Why this isn't just {@code NexoFurniture.remove(base, owner)}: Nexo's
+     * internal break path skips drops when the player is in CREATIVE mode
+     * (admin testing) and depends on the player's main-hand item satisfying
+     * {@code Drop.isToolEnough}. For an automated harvester we want
+     * deterministic drops regardless of who the owner is or what they're
+     * holding, so we replicate the player-break flow manually:
+     * <ol>
+     *   <li>Fire {@link com.nexomc.nexo.api.events.furniture.NexoFurnitureBreakEvent}
+     *       so RoseLoot / other plugins see the break.</li>
+     *   <li>Call {@code drop.furnitureSpawns(base, syntheticTool)} ourselves —
+     *       bypasses the creative-mode skip and uses a deterministic tool.</li>
+     *   <li>Remove the base entity via {@code NexoFurniture.remove(base, null, null)}
+     *       (null player → Nexo skips its own drop logic and just removes).</li>
+     * </ol>
+     */
     private boolean tryHarvestFurniture(ActiveMachine m, World world, ItemDisplay base) {
         var fm = NexoFurniture.furnitureMechanic(base);
         if (fm == null || fm.getItemID() == null) return false;
@@ -380,28 +412,53 @@ public class HarvesterMachineMechanicFactory extends MechanicFactory implements 
         Player owner = Bukkit.getPlayer(m.ownerId);
         if (owner == null) return false;
 
-        // Capture position + orientation before removal — both align to the
-        // furniture's BLOCK so the replant lands flush on the same farmland.
         Location baseLoc = base.getLocation().getBlock().getLocation();
         float yaw = base.getLocation().getYaw();
 
-        // Trigger the canonical break — Nexo runs the furniture's loot table.
-        if (!NexoFurniture.remove(base, owner)) return false;
+        // 1. Fetch the configured drop (built by Nexo from Mechanics.furniture.drop.*).
+        var breakable = fm.getBreakable();
+        var drop = (breakable != null) ? breakable.getDrop() : null;
 
-        // Replant the first-stage furniture at the exact same position/yaw,
-        // then ask the FarmerEventListener to start the growth schedule (the
-        // listener normally listens to NexoFurniturePlaceEvent fired by player
-        // placements — calling onManualPlacement explicitly mirrors the
-        // SeedPlantListener pattern).
+        // 2. Fire the canonical NexoFurnitureBreakEvent so RoseLoot's
+        //    NexoBlockBreakListener.onNexoFurnitureBlockBreak picks it up and
+        //    runs any loot table the admin attached to this furniture id.
+        try {
+            var event = new com.nexomc.nexo.api.events.furniture.NexoFurnitureBreakEvent(fm, base, owner);
+            Bukkit.getPluginManager().callEvent(event);
+            if (event.isCancelled()) return false;
+            // RoseLoot or another listener may have rewritten the Drop.
+            if (event.getDrop() != null) drop = event.getDrop();
+        } catch (Throwable t) {
+            plugin.getLogger().warning("[Harvester] Failed firing NexoFurnitureBreakEvent: " + t.getMessage());
+        }
+
+        // 3. Spawn the drops manually with a synthetic tool — bypasses Nexo's
+        //    creative-mode + main-hand checks.
+        if (drop != null && !drop.isEmpty()) {
+            try {
+                drop.furnitureSpawns(base, new ItemStack(Material.DIAMOND_HOE));
+            } catch (Throwable t) {
+                plugin.getLogger().warning("[Harvester] Drop.furnitureSpawns failed: " + t.getMessage());
+            }
+        }
+
+        // 4. Remove the entity. Passing null player makes Nexo skip its own
+        //    drop step (we already did it in step 3) and just despawn the
+        //    ItemDisplay.
+        try {
+            NexoFurniture.remove(base, null, null);
+        } catch (Throwable t) {
+            plugin.getLogger().warning("[Harvester] NexoFurniture.remove failed: " + t.getMessage());
+            return false;
+        }
+
+        // 5. Replant the first-stage furniture and start the growth schedule.
         if (NexoFurniture.isFurniture(replantId)) {
             NexoFurniture.place(replantId, baseLoc, yaw, BlockFace.UP);
             triggerFarmerGrowth(replantId, baseLoc);
         }
 
-        // Nexo drops items on the next tick — defer the sweep so items have
-        // actually spawned in the world before we try to scoop them.
-        final Location sweepCentre = baseLoc.clone();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> sweepNearbyItems(m, world, sweepCentre), 2L);
+        // Drops are picked up by the HarvesterStorage's passive vacuum.
         return true;
     }
 

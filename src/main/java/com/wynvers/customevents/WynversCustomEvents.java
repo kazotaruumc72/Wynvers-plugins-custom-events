@@ -22,6 +22,7 @@ import com.wynvers.customevents.nexo.blockbreaker.BlockBreakerUpgradeMechanicFac
 import com.wynvers.customevents.nexo.blockbreaker.BlockBreakerUpgradeMenuListener;
 import com.wynvers.customevents.nexo.breachcharge.BreachChargeMechanicFactory;
 import com.wynvers.customevents.nexo.breachcharge.DefuserMechanicFactory;
+import com.wynvers.customevents.nexo.chunkbreaker.ChunkBreakerMechanicFactory;
 import com.wynvers.customevents.nexo.enderjammer.EnderJammerMechanicFactory;
 import com.wynvers.customevents.nexo.explosionreducer.ExplosionReducerMechanicFactory;
 import com.wynvers.customevents.nexo.harvesting.HarvestingMechanicFactory;
@@ -243,6 +244,12 @@ public class WynversCustomEvents extends JavaPlugin implements TabCompleter {
                                     .registerMechanicFactory(new HarvesterMachineMechanicFactory(WynversCustomEvents.this), true);
                             getLogger().info("Registered Nexo mechanic '"
                                     + HarvesterMachineMechanicFactory.MECHANIC_ID + "'.");
+                        }
+                        if (ChunkBreakerMechanicFactory.instance() == null) {
+                            com.nexomc.nexo.mechanics.MechanicsManager.INSTANCE
+                                    .registerMechanicFactory(new ChunkBreakerMechanicFactory(WynversCustomEvents.this), true);
+                            getLogger().info("Registered Nexo mechanic '"
+                                    + ChunkBreakerMechanicFactory.MECHANIC_ID + "'.");
                         }
                     } catch (Throwable t) {
                         getLogger().warning(

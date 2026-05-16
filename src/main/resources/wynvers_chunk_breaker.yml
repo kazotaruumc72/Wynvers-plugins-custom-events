@@ -1,0 +1,59 @@
+# WynversCustomEvents - Chunk Breaker custom_block
+#
+# INSTALLATION:
+# 1. Place this file in: plugins/Nexo/items/
+# 2. Provide the texture: wynvers:blocks/chunk_breaker
+# 3. Run: /nexo reload
+#
+# USAGE:
+# - One-shot, consumed at placement.
+# - The moment a player places the block, the entire chunk it sits in is
+#   razed from world max-height down to (but excluding) bedrock — including
+#   water and lava. The placed ChunkBreaker block itself is cleared first
+#   so it doesn't appear in the loot pile.
+# - Vanilla drops are computed with a synthetic netherite pickaxe (toggle
+#   `silk_touch` / `fortune_level` below).
+# - Nexo custom_blocks are removed via the canonical Nexo API so RoseLoot
+#   loot tables continue to fire.
+# - Every loose Item entity produced by the operation is then swept and
+#   re-spawned, stacked at the chunk's centre, one block above the highest
+#   bedrock block of the chunk.
+#
+# PERFORMANCE:
+# - `batch_y_slices` controls how many Y-layers are processed per server
+#   tick. Default 32 → a full Overworld chunk (384 layers) finishes in
+#   ~12 ticks (~0.6s). Lower the value if a single chunk-break stutters
+#   on your hardware.
+#
+# BLACKLISTS:
+# - `blacklist_materials`: vanilla materials never broken. BEDROCK is
+#   always blocked even if the list is empty.
+# - `blacklist_nexo_blocks`: Nexo custom_block IDs that should also be
+#   skipped (e.g. claim cores, indestructible furniture-style blocks).
+
+wynvers_chunk_breaker:
+  itemname: "<light_purple>Chunk Breaker</light_purple>"
+  material: PAPER
+  Mechanics:
+    custom_block:
+      type: NOTEBLOCK
+      custom_variation: 400
+    chunk_breaker:
+      batch_y_slices: 32
+      silk_touch: false
+      fortune_level: 0
+      blacklist_materials:
+        - BEDROCK
+        - BARRIER
+        - COMMAND_BLOCK
+        - END_PORTAL_FRAME
+        - END_PORTAL
+        - NETHER_PORTAL
+        - REINFORCED_DEEPSLATE
+      blacklist_nexo_blocks: []
+      start_particle: EXPLOSION_EMITTER
+      start_sound: ENTITY_GENERIC_EXPLODE
+      finish_sound: BLOCK_BEACON_ACTIVATE
+  Pack:
+    parent_model: block/cube_all
+    texture: wynvers:blocks/chunk_breaker

@@ -27,9 +27,13 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Nexo {@link MechanicFactory} for the {@code block_breaker} mechanic.
@@ -54,6 +58,14 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
     private final JavaPlugin plugin;
     private final BlockBreakerManager manager;
     private final BlockBreakerStore store;
+    /**
+     * Per-player location of the last BlockBreaker the player interacted with
+     * (right-click, left-click, shift+right-click). Used by the
+     * {@code %wce_blockbreaker_closest%} placeholder to scope its scan to the
+     * "current" breaker. Cleared lazily when the entry no longer resolves to
+     * a registered BlockBreaker.
+     */
+    private final Map<UUID, Location> lastInteracted = new ConcurrentHashMap<>();
 
     public BlockBreakerMechanicFactory(JavaPlugin plugin) {
         super(MECHANIC_ID);
@@ -68,6 +80,61 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
     public BlockBreakerManager manager()                  { return manager; }
     public JavaPlugin plugin()                            { return plugin; }
     public BlockBreakerStore store()                      { return store; }
+
+    /**
+     * Returns the location of the last BlockBreaker the given player
+     * interacted with, or {@code null} if the player never interacted with
+     * one or the cached location no longer resolves to a BlockBreaker
+     * (block was broken, world unloaded, etc.). Self-healing: stale entries
+     * are evicted on read.
+     */
+    public @Nullable Location lastInteractedFor(UUID playerId) {
+        Location loc = lastInteracted.get(playerId);
+        if (loc == null) return null;
+        if (loc.getWorld() == null) {
+            lastInteracted.remove(playerId);
+            return null;
+        }
+        CustomBlockMechanic cb = NexoBlocks.customBlockMechanic(loc.getBlock());
+        if (cb == null || getMechanic(cb.getItemID()) == null) {
+            lastInteracted.remove(playerId);
+            return null;
+        }
+        return loc;
+    }
+
+    /**
+     * Returns every currently registered BlockBreaker location owned by
+     * {@code ownerId}. Entries whose chunk is unloaded, whose world is
+     * gone, or whose block no longer resolves to a BlockBreaker are
+     * skipped (not evicted — the manager owns lifecycle there).
+     *
+     * <p>Used by the {@code %wce_blockbreakers_closest%} placeholder to
+     * scan around every placed breaker of the requesting player.
+     */
+    public @NotNull List<Location> locationsOwnedBy(UUID ownerId) {
+        List<Location> result = new ArrayList<>();
+        for (var entry : manager.states().entrySet()) {
+            BlockBreakerManager.State state = entry.getValue();
+            if (state == null || state.ownerId == null) continue;
+            if (!state.ownerId.equals(ownerId)) continue;
+            String[] parts = entry.getKey().split(":");
+            if (parts.length != 4) continue;
+            try {
+                var world = Bukkit.getWorld(UUID.fromString(parts[0]));
+                if (world == null) continue;
+                int x = Integer.parseInt(parts[1]);
+                int y = Integer.parseInt(parts[2]);
+                int z = Integer.parseInt(parts[3]);
+                if (!world.isChunkLoaded(x >> 4, z >> 4)) continue;
+                Block b = world.getBlockAt(x, y, z);
+                CustomBlockMechanic cb = NexoBlocks.customBlockMechanic(b);
+                if (cb == null || getMechanic(cb.getItemID()) == null) continue;
+                result.add(b.getLocation());
+            } catch (Exception ignored) {}
+        }
+        return result;
+    }
 
     /**
      * Loads persisted breaker states from disk and resumes any active break
@@ -150,6 +217,9 @@ public class BlockBreakerMechanicFactory extends MechanicFactory implements List
 
         Player player = event.getPlayer();
         String blockKey = BlockBreakerManager.keyOf(clicked.getLocation());
+        // Record this interaction so %wce_blockbreaker_closest% knows which
+        // breaker to scan for this player.
+        lastInteracted.put(player.getUniqueId(), clicked.getLocation().clone());
 
         // Left-click with the activator → show status, no face toggle, no break.
         if (action == Action.LEFT_CLICK_BLOCK) {

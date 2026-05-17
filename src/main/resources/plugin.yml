@@ -11,6 +11,8 @@ softdepend:
   - Orestack
   - Nexo
   - WorldGuard
+  - WorldEdit
+  - FastAsyncWorldEdit
   - PlaceholderAPI
   - RoseLoot
   - zShop

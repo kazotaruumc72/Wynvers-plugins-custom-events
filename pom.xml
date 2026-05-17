@@ -96,6 +96,11 @@
             <id>enginehub-repo</id>
             <url>https://maven.enginehub.org/repo/</url>
         </repository>
+        <!-- FastAsyncWorldEdit (IntellectualSites public Maven) -->
+        <repository>
+            <id>intellectualsites-public</id>
+            <url>https://mvn.intellectualsites.com/content/groups/public/</url>
+        </repository>
         <!-- PlaceholderAPI -->
         <repository>
             <id>placeholderapi</id>
@@ -133,11 +138,46 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- WorldGuard (soft dependency, custom flag registration) -->
+        <!-- WorldGuard (soft dependency, custom flag registration).
+             Exclude the transitive worldedit-* artifacts so FAWE's
+             worldedit-core (2.13.1) wins on the compile classpath. WG ships
+             with a much older worldedit-core (7.2.x) whose Mask interface
+             lacks the copy() method and has a non-default toMask2D(),
+             breaking our compile if it shadows FAWE's class. -->
         <dependency>
             <groupId>com.sk89q.worldguard</groupId>
             <artifactId>worldguard-bukkit</artifactId>
             <version>7.0.9</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.sk89q.worldedit</groupId>
+                    <artifactId>worldedit-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.sk89q.worldedit</groupId>
+                    <artifactId>worldedit-bukkit</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- WorldEdit (soft dependency, custom Pattern parser for FAWE).
+             We compile against the FAWE artifacts because FAWE adds the
+             AliasedParser interface (com.fastasyncworldedit.core.extension.
+             factory.parser.AliasedParser) that we need to implement to make
+             custom prefix patterns work through FAWE's RichPatternParser.
+             At runtime, FAWE is a drop-in replacement for WorldEdit so the
+             same classes resolve regardless of which engine the server runs. -->
+        <dependency>
+            <groupId>com.fastasyncworldedit</groupId>
+            <artifactId>FastAsyncWorldEdit-Core</artifactId>
+            <version>2.13.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fastasyncworldedit</groupId>
+            <artifactId>FastAsyncWorldEdit-Bukkit</artifactId>
+            <version>2.13.1</version>
             <scope>provided</scope>
         </dependency>
 

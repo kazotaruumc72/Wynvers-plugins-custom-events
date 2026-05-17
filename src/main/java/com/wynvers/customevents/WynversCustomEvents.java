@@ -41,6 +41,7 @@ import com.wynvers.customevents.roseloot.CancelDropsLootItem;
 import com.wynvers.customevents.roseloot.CancelEventLootItem;
 import com.wynvers.customevents.roseloot.NexoBlockCondition;
 import com.wynvers.customevents.roseloot.SetNexoBlockLootItem;
+import com.wynvers.customevents.worldedit.WorldEditOrestackIntegration;
 import com.wynvers.customevents.worldguard.BlockPriorityFlag;
 import com.wynvers.customevents.worldguard.BlockPriorityListener;
 import org.bukkit.Bukkit;
@@ -403,6 +404,10 @@ public class WynversCustomEvents extends JavaPlugin implements TabCompleter {
         // Must run before AxPickaxes fires AxIntegrationsLoadEvent (guaranteed
         // by 'loadbefore: AxPickaxes' in plugin.yml).
         AxPickaxesNexoIntegrator.register(this);
+
+        // WorldEdit / FAWE integration: registers the 'orestackgenerator:<name>'
+        // pattern so admins can run e.g. //replace teak_wood orestackgenerator:teak.
+        WorldEditOrestackIntegration.register(this);
 
         // zMenu bridge: registers WCE_UPGRADE_SLOT / WCE_VALIDATION buttons
         // and copies blockbreaker.yml into plugins/zMenu/inventories/.

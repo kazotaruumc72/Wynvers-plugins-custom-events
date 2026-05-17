@@ -36,6 +36,9 @@ import com.wynvers.customevents.nexo.slipthrough.SlipThroughLoader;
 import com.wynvers.customevents.nexo.teleporter.TeleporterMechanicFactory;
 import com.wynvers.customevents.nexo.teleporter.TeleporterSetupManager;
 import com.wynvers.customevents.papi.WcePlaceholderExpansion;
+import com.wynvers.customevents.roseloot.BlockEventTracker;
+import com.wynvers.customevents.roseloot.CancelDropsLootItem;
+import com.wynvers.customevents.roseloot.CancelEventLootItem;
 import com.wynvers.customevents.roseloot.NexoBlockCondition;
 import com.wynvers.customevents.roseloot.SetNexoBlockLootItem;
 import com.wynvers.customevents.worldguard.BlockPriorityFlag;
@@ -354,6 +357,27 @@ public class WynversCustomEvents extends JavaPlugin implements TabCompleter {
                 }
             } catch (Throwable t) {
                 getLogger().warning("Failed to register RoseLoot integration: " + t.getMessage());
+            }
+        }
+
+        // RoseLoot integration: cancel-event / cancel-drops loot items (no Nexo dependency)
+        if (Bukkit.getPluginManager().getPlugin("RoseLoot") != null) {
+            try {
+                var api = dev.rosewood.roseloot.api.RoseLootAPI.getInstance();
+                boolean tracked = false;
+                if (api.registerCustomLootItem("cancel-event", CancelEventLootItem::fromSection)) {
+                    tracked = true;
+                    getLogger().info("Registered RoseLoot loot item 'cancel-event'.");
+                }
+                if (api.registerCustomLootItem("cancel-drops", CancelDropsLootItem::fromSection)) {
+                    tracked = true;
+                    getLogger().info("Registered RoseLoot loot item 'cancel-drops'.");
+                }
+                if (tracked) {
+                    Bukkit.getPluginManager().registerEvents(new BlockEventTracker(), this);
+                }
+            } catch (Throwable t) {
+                getLogger().warning("Failed to register RoseLoot cancel items: " + t.getMessage());
             }
         }
 
